@@ -3,7 +3,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Paper: Under Review](https://img.shields.io/badge/Paper-Under%20Review-orange)]()
-[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](#Colab Notebooks)
+[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb)
 
 > **Paper under review.** Code and data are provided for reproducibility purposes.
 
@@ -42,7 +42,7 @@ The framework combines:
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/[username]/IoUT-Interrogator-Framework.git
+git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
 cd IoUT-Interrogator-Framework
 pip install -r requirements.txt
 
