@@ -3,7 +3,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Paper: Under Review](https://img.shields.io/badge/Paper-Under%20Review-orange)]()
-[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/[username]/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb)
+[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](#Colab Notebooks)
 
 > **Paper under review.** Code and data are provided for reproducibility purposes.
 
@@ -91,10 +91,10 @@ IoUT-Interrogator-Framework/
 
 | Notebook | Description | Open |
 |---|---|---|
-| `01_trust_inference_demo.ipynb` | Train and run the transformer trust model | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/[username]/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb) |
-| `02_simulation_analysis.ipynb` | Analyse simulation outputs and compare baselines | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/[username]/IoUT-Interrogator-Framework/blob/main/notebooks/02_simulation_analysis.ipynb) |
-| `03_blockchain_demo.ipynb` | Mock PBFT blockchain trust ledger demo | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/[username]/IoUT-Interrogator-Framework/blob/main/notebooks/03_blockchain_demo.ipynb) |
-| `04_ablation_study.ipynb` | Reproduce the ablation study figures | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/[username]/IoUT-Interrogator-Framework/blob/main/notebooks/04_ablation_study.ipynb) |
+| `01_trust_inference_demo.ipynb` | Train and run the transformer trust model | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb) |
+| `02_simulation_analysis.ipynb` | Analyse simulation outputs and compare baselines | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/02_simulation_analysis.ipynb) |
+| `03_blockchain_demo.ipynb` | Mock PBFT blockchain trust ledger demo | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/03_blockchain_demo.ipynb) |
+| `04_ablation_study.ipynb` | Reproduce the ablation study figures | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/04_ablation_study.ipynb) |
 
 ---
 
