@@ -24,12 +24,90 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
+
+import numpy as np
+import torch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from model.inference.transformer_model import train_model, set_seeds
+
+
+def _pad_or_truncate_sequence(seq_list, seq_len: int) -> np.ndarray:
+    seq = np.array(seq_list, dtype=np.float32)
+    if seq.shape[0] < seq_len:
+        pad = np.zeros((seq_len - seq.shape[0], seq.shape[1]), dtype=np.float32)
+        seq = np.vstack([seq, pad])
+    else:
+        seq = seq[:seq_len]
+    return seq
+
+
+def _select_calibration_subset(sequences: list, min_per_class: int = 20) -> tuple[list, dict]:
+    legit = [item for item in sequences if item.get("label", -1) == 0]
+    adv = [item for item in sequences if item.get("label", -1) == 1]
+
+    if len(adv) == 0:
+        raise ValueError("Calibration validation requires adversarial samples, but found 0.")
+    if len(legit) == 0:
+        raise ValueError("Calibration validation requires legitimate samples, but found 0.")
+
+    if len(legit) < min_per_class or len(adv) < min_per_class:
+        return sequences, {
+            "mode": "full_set",
+            "source_legit": len(legit),
+            "source_adv": len(adv),
+            "eval_legit": len(legit),
+            "eval_adv": len(adv),
+        }
+
+    n_each = min(len(legit), len(adv))
+    eval_set = legit[:n_each] + adv[:n_each]
+    return eval_set, {
+        "mode": "stratified_balanced",
+        "source_legit": len(legit),
+        "source_adv": len(adv),
+        "eval_legit": n_each,
+        "eval_adv": n_each,
+    }
+
+
+def _compute_calibration_stats(model, sequences: list, seq_len: int, temperature: float) -> dict:
+    trust_legit = []
+    trust_adv = []
+
+    model.eval()
+    with torch.no_grad():
+        for item in sequences:
+            seq = _pad_or_truncate_sequence(item["sequence"], seq_len)
+            logit = float(model(torch.from_numpy(seq).unsqueeze(0)).squeeze())
+            p_adv = 1.0 / (1.0 + np.exp(-(logit / temperature)))
+            trust = 1.0 - p_adv
+            if item.get("label", -1) == 0:
+                trust_legit.append(trust)
+            elif item.get("label", -1) == 1:
+                trust_adv.append(trust)
+
+    if len(trust_adv) == 0:
+        raise ValueError("Calibration stats cannot be computed: adversarial trust scores count is 0.")
+
+    combined = np.array(trust_legit + trust_adv, dtype=np.float64)
+    legit_arr = np.array(trust_legit, dtype=np.float64)
+    adv_arr = np.array(trust_adv, dtype=np.float64)
+
+    return {
+        "legit_count": int(len(legit_arr)),
+        "adv_count": int(len(adv_arr)),
+        "legit_mean": float(np.mean(legit_arr)),
+        "legit_std": float(np.std(legit_arr)),
+        "adv_mean": float(np.mean(adv_arr)),
+        "adv_std": float(np.std(adv_arr)),
+        "combined_mean": float(np.mean(combined)),
+        "combined_std": float(np.std(combined)),
+    }
 
 
 def main():
@@ -62,6 +140,24 @@ def main():
         action="store_true",
         help="Skip the overfit sanity check (faster; use for CI)",
     )
+    parser.add_argument(
+        "--label-smoothing",
+        type=float,
+        default=0.1,
+        help="Binary label smoothing factor (default: 0.1 => y*0.9 + 0.05)",
+    )
+    parser.add_argument(
+        "--inference-temperature",
+        type=float,
+        default=1.5,
+        help="Default calibration temperature used for post-train distribution checks.",
+    )
+    parser.add_argument(
+        "--calibration-min-per-class",
+        type=int,
+        default=20,
+        help="Minimum samples per class for stratified calibration checks.",
+    )
     args = parser.parse_args()
 
     # ── Pre-flight checks ─────────────────────────────────────────────────
@@ -71,6 +167,9 @@ def main():
     print(f"  Checkpoint dir:  {args.checkpoint_dir}")
     print(f"  Seed:            {args.seed}")
     print(f"  Sanity check:    {'disabled' if args.no_sanity else 'enabled'}")
+    print(f"  Label smoothing: {args.label_smoothing}")
+    print(f"  Inference temp:  {args.inference_temperature}")
+    print(f"  Calib min/class: {args.calibration_min_per_class}")
     print()
 
     if not os.path.exists(args.config):
@@ -91,9 +190,45 @@ def main():
         config_path=args.config,
         data_path=args.data,
         checkpoint_dir=args.checkpoint_dir,
+        label_smoothing_override=args.label_smoothing,
+        inference_temperature_override=args.inference_temperature,
         verbose=True,
         run_sanity=not args.no_sanity,
     )
+
+    with open(args.config) as f:
+        config = json.load(f)
+    with open(args.data) as f:
+        full_sequences = json.load(f)
+
+    seq_len = config["architecture"]["seq_len"]
+
+    calib_sequences, calib_meta = _select_calibration_subset(
+        full_sequences,
+        min_per_class=args.calibration_min_per_class,
+    )
+    calib_stats = _compute_calibration_stats(
+        model,
+        calib_sequences,
+        seq_len=seq_len,
+        temperature=args.inference_temperature,
+    )
+
+    print("\n=== Stratified Calibration Validation ===")
+    print(f"  Mode               : {calib_meta['mode']}")
+    print(f"  Source counts      : legit={calib_meta['source_legit']} adv={calib_meta['source_adv']}")
+    print(f"  Eval counts        : legit={calib_stats['legit_count']} adv={calib_stats['adv_count']}")
+    print(f"  Legit trust        : mean={calib_stats['legit_mean']:.4f} std={calib_stats['legit_std']:.4f}")
+    print(f"  Adv trust          : mean={calib_stats['adv_mean']:.4f} std={calib_stats['adv_std']:.4f}")
+    print(f"  Combined trust     : mean={calib_stats['combined_mean']:.4f} std={calib_stats['combined_std']:.4f}")
+
+    if calib_stats["combined_std"] < 0.05:
+        print(
+            f"  [WARNING] Stratified combined std={calib_stats['combined_std']:.4f} < 0.05. "
+            "Calibration spread is still too narrow."
+        )
+    else:
+        print("  [OK] Stratified combined std >= 0.05.")
 
     print(f"Training complete.")
     print(f"Best model saved to: {os.path.join(args.checkpoint_dir, 'best_model.pt')}")

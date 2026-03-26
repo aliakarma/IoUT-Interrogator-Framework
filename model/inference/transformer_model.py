@@ -100,8 +100,9 @@ class TrustTransformer(nn.Module):
         self.num_heads  = arch["num_heads"]
         self.num_layers = arch["num_layers"]
         self.d_ff       = arch["d_ff"]
-        # RC-O1 fix: dropout from config (v2 config: 0.2 instead of v1's 0.1)
-        self.dropout_p  = arch["dropout"]
+        # Calibration/regularization fix: use at least 0.30 dropout to reduce
+        # overconfident logit saturation while keeping architecture unchanged.
+        self.dropout_p  = max(float(arch.get("dropout", 0.2)), 0.30)
 
         self.input_proj = nn.Linear(self.input_dim, self.d_model)
         self.pos_enc    = PositionalEncoding(
@@ -252,6 +253,27 @@ def _adv_threshold(tau_min: float) -> float:
     return 1.0 - tau_min
 
 
+def smooth_binary_labels(labels: torch.Tensor, smoothing: float = 0.1) -> torch.Tensor:
+    """
+    Apply symmetric binary label smoothing compatible with BCEWithLogitsLoss.
+
+    Required form:
+        y_smooth = y * 0.9 + 0.05   (when smoothing=0.1)
+    """
+    if smoothing <= 0:
+        return labels
+    if smoothing >= 1:
+        raise ValueError(f"smoothing must be in [0,1), got {smoothing}")
+    return labels * (1.0 - smoothing) + 0.5 * smoothing
+
+
+def temperature_scale_logits(logits: torch.Tensor, temperature: float = 1.0) -> torch.Tensor:
+    """Scale logits by temperature before sigmoid; higher T softens confidence."""
+    if temperature <= 0:
+        raise ValueError(f"temperature must be > 0, got {temperature}")
+    return logits / temperature
+
+
 # ---------------------------------------------------------------------------
 # Seed control
 # ---------------------------------------------------------------------------
@@ -277,6 +299,7 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     tau_min: float = 0.65,
+    label_smoothing: float = 0.1,
     debug:   bool  = False,
 ) -> Tuple[float, float]:
     """Train one epoch. Returns (mean_loss, accuracy)."""
@@ -289,7 +312,8 @@ def train_epoch(
     for batch_idx, (sequences, labels) in enumerate(loader):
         optimizer.zero_grad()
         logits = model(sequences)
-        loss   = criterion(logits, labels)
+        smoothed_labels = smooth_binary_labels(labels, smoothing=label_smoothing)
+        loss            = criterion(logits, smoothed_labels)
 
         if not torch.isfinite(loss):
             print(f"  [WARNING] non-finite loss at batch {batch_idx}, skipping.")
@@ -312,6 +336,8 @@ def train_epoch(
             print(f"  [debug] logits: min={logits.min():.3f} max={logits.max():.3f}")
             print(f"  [debug] probs:  min={probs.min():.3f} max={probs.max():.3f}")
             print(f"  [debug] labels: {labels.flatten()[:8].tolist()}")
+            if label_smoothing > 0:
+                print(f"  [debug] smoothed labels: {smoothed_labels.flatten()[:8].tolist()}")
             print(f"  [debug] preds:  {predicted.flatten()[:8].tolist()}")
             print(f"  [debug] loss:   {loss.item():.4f}")
 
@@ -323,6 +349,7 @@ def evaluate(
     loader: DataLoader,
     criterion: nn.Module,
     tau_min: float = 0.65,
+    temperature: float = 1.0,
 ) -> Tuple[float, float, float, float]:
     """Evaluate. Returns (loss, accuracy, precision, recall)."""
     model.eval()
@@ -337,7 +364,7 @@ def evaluate(
             loss   = criterion(logits, labels)
             total_loss += loss.item() * sequences.size(0)
 
-            probs = torch.sigmoid(logits)
+            probs = torch.sigmoid(temperature_scale_logits(logits, temperature))
             preds = (probs > threshold).float()
 
             all_preds.extend(preds.cpu().numpy().flatten().tolist())
@@ -365,6 +392,7 @@ def validate_output_distribution(
     sequences: list,
     seq_len: int,
     tau_min: float = 0.65,
+    temperature: float = 1.5,
     min_std:  float = 0.05,
     verbose:  bool  = True,
 ) -> Dict[str, float]:
@@ -384,8 +412,21 @@ def validate_output_distribution(
     legit_scores = []
     adv_scores   = []
 
+    # Use a stratified subset so validation is meaningful even if the input
+    # list is class-ordered on disk.
+    max_samples = min(100, len(sequences))
+    legit_items = [s for s in sequences if s.get("label", -1) == 0]
+    adv_items = [s for s in sequences if s.get("label", -1) == 1]
+
+    if legit_items and adv_items:
+        n_legit_take = max_samples // 2
+        n_adv_take = max_samples - n_legit_take
+        eval_items = legit_items[:n_legit_take] + adv_items[:n_adv_take]
+    else:
+        eval_items = sequences[:max_samples]
+
     with torch.no_grad():
-        for item in sequences[:100]:    # check first 100 for speed
+        for item in eval_items:
             seq = np.array(item["sequence"], dtype=np.float32)
             if seq.shape[0] < seq_len:
                 pad = np.zeros((seq_len - seq.shape[0], seq.shape[1]), dtype=np.float32)
@@ -395,7 +436,7 @@ def validate_output_distribution(
 
             x     = torch.from_numpy(seq).unsqueeze(0)
             logit = model(x)
-            trust = 1.0 - torch.sigmoid(logit)
+            trust = 1.0 - torch.sigmoid(temperature_scale_logits(logit, temperature))
             score = float(trust.squeeze())
 
             if item["label"] == 0:
@@ -417,20 +458,33 @@ def validate_output_distribution(
 
     if verbose:
         print(f"\n  Output distribution validation:")
-        print(f"    Legit  trust scores: mean={stats['mean_legit']:.3f}  "
-              f"(n={stats['n_legit']})")
-        print(f"    Adv    trust scores: mean={stats['mean_adv']:.3f}  "
-              f"(n={stats['n_adv']})")
-        print(f"    Overall std: {stats['std_all']:.4f}  "
-              f"(min required: {min_std})")
-        print(f"    Flagged legit (false pos): {stats['flagged_legit']}/{stats['n_legit']}")
-        print(f"    Flagged adv   (true  pos): {stats['flagged_adv']}/{stats['n_adv']}")
+        print(
+            f"    Legit  trust scores: mean={stats['mean_legit']:.3f}  "
+            f"(n={stats['n_legit']})"
+        )
+        print(
+            f"    Adv    trust scores: mean={stats['mean_adv']:.3f}  "
+            f"(n={stats['n_adv']})"
+        )
+        print(f"    Temperature used: {temperature:.2f}")
+        print(
+            f"    Overall std: {stats['std_all']:.4f}  "
+            f"(min required: {min_std})"
+        )
+        print(
+            f"    Flagged legit (false pos): "
+            f"{stats['flagged_legit']}/{stats['n_legit']}"
+        )
+        print(
+            f"    Flagged adv   (true  pos): "
+            f"{stats['flagged_adv']}/{stats['n_adv']}"
+        )
 
     if stats["std_all"] < min_std:
         print(f"  [WARNING] Output std={stats['std_all']:.4f} < {min_std}. "
               f"Model may be outputting near-constant trust scores.")
-        print(f"  [HINT] Check that data contains both classes and that "
-              f"generate_behavioral_data.py (v2) was used.")
+        print(f"  [HINT] Increase inference temperature above {temperature:.2f} "
+              f"or increase label smoothing to reduce overconfidence.")
 
     return stats
 
@@ -494,6 +548,8 @@ def train_model(
     config_path:    str  = "model/configs/transformer_config.json",
     data_path:      str  = "data/raw/behavioral_sequences.json",
     checkpoint_dir: str  = "model/checkpoints/",
+    label_smoothing_override: Optional[float] = None,
+    inference_temperature_override: Optional[float] = None,
     verbose:        bool = True,
     run_sanity:     bool = True,
 ) -> "TrustTransformer":
@@ -506,6 +562,17 @@ def train_model(
 
     seed    = config["training"]["random_seed"]
     tau_min = config["trust_scoring"]["threshold_tau_min"]
+    label_smoothing = float(
+        config.get("training", {}).get("label_smoothing", 0.1)
+        if label_smoothing_override is None
+        else label_smoothing_override
+    )
+    inference_temperature = float(
+        config.get("trust_scoring", {}).get("temperature", 1.5)
+        if inference_temperature_override is None
+        else inference_temperature_override
+    )
+    weight_decay = max(float(config.get("training", {}).get("weight_decay", 0.0)), 1e-3)
 
     # Sanity check (uses its own seed=0, does NOT affect main seed)
     if run_sanity:
@@ -562,8 +629,9 @@ def train_model(
         print(f"\nClass balance: {n_legit} legit, {n_adv} adv → "
               f"pos_weight={pos_weight:.2f}  "
               f"(lr={config['training']['learning_rate']}, "
-              f"dropout={config['architecture']['dropout']}, "
-              f"wd={config['training']['weight_decay']})")
+              f"dropout_effective={max(config['architecture']['dropout'], 0.30)}, "
+              f"label_smoothing={label_smoothing}, "
+              f"wd_effective={weight_decay})")
 
     criterion = nn.BCEWithLogitsLoss(
         pos_weight=torch.tensor([pos_weight], dtype=torch.float32)
@@ -576,7 +644,7 @@ def train_model(
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["training"]["learning_rate"],
-        weight_decay=config["training"]["weight_decay"],
+        weight_decay=weight_decay,
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=5, factor=0.5
@@ -591,10 +659,11 @@ def train_model(
         train_loss, train_acc = train_epoch(
             model, train_loader, optimizer, criterion,
             tau_min=tau_min,
+            label_smoothing=label_smoothing,
             debug=(epoch == 1 and verbose),
         )
         val_loss, val_acc, val_prec, val_rec = evaluate(
-            model, val_loader, criterion, tau_min=tau_min
+            model, val_loader, criterion, tau_min=tau_min, temperature=1.0
         )
         scheduler.step(val_loss)
 
@@ -626,7 +695,7 @@ def train_model(
                    weights_only=True)
     )
     test_loss, test_acc, test_prec, test_rec = evaluate(
-        model, test_loader, criterion, tau_min=tau_min
+        model, test_loader, criterion, tau_min=tau_min, temperature=1.0
     )
     f1 = (2 * test_prec * test_rec) / (test_prec + test_rec + 1e-8)
 
@@ -644,7 +713,12 @@ def train_model(
     # Output distribution validation
     if verbose:
         validate_output_distribution(
-            model, sequences[:100], seq_len, tau_min=tau_min
+            model,
+            sequences[:100],
+            seq_len,
+            tau_min=tau_min,
+            temperature=inference_temperature,
+            min_std=0.05,
         )
 
     return model
@@ -672,6 +746,7 @@ def load_model(
 def compute_trust_score(
     model: TrustTransformer,
     sequence: np.ndarray,
+    temperature: float = 1.5,
 ) -> float:
     """
     Compute trust score: trust = 1 - sigmoid(logit)  in [0,1].
@@ -681,18 +756,19 @@ def compute_trust_score(
     with torch.no_grad():
         x     = torch.from_numpy(sequence.astype(np.float32)).unsqueeze(0)
         logit = model(x)
-        trust = 1.0 - torch.sigmoid(logit)
+        trust = 1.0 - torch.sigmoid(temperature_scale_logits(logit, temperature))
     return float(trust.squeeze())
 
 
 def compute_trust_batch(
     model: TrustTransformer,
     sequences: np.ndarray,
+    temperature: float = 1.5,
 ) -> np.ndarray:
     """Compute trust scores for a batch (N, K, 5) → (N,)."""
     model.eval()
     with torch.no_grad():
         x      = torch.from_numpy(sequences.astype(np.float32))
         logits = model(x)
-        trust  = 1.0 - torch.sigmoid(logits)
+        trust  = 1.0 - torch.sigmoid(temperature_scale_logits(logits, temperature))
     return trust.squeeze(-1).numpy()
