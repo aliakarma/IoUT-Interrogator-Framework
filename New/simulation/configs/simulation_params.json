@@ -1,0 +1,61 @@
+{
+  "_comment": "IoUT Interrogator Framework — Simulation Parameters",
+  "_note": "These parameters match the NS-3 Aqua-Sim prototype described in the paper.",
+
+  "network": {
+    "num_agents": 50,
+    "num_adversarial": 7,
+    "adversarial_fraction": 0.15,
+    "deployment_area_km2": 1.0,
+    "grid_side_m": 1000
+  },
+
+  "acoustic_channel": {
+    "data_rate_kbps_min": 10,
+    "data_rate_kbps_max": 20,
+    "propagation_delay_s_per_km": 0.67,
+    "path_loss_exponent": 2.0,
+    "elec_energy_nJ_per_bit": 50,
+    "amp_energy_pJ_per_bit_per_m2": 100
+  },
+
+  "agent_mobility": {
+    "model": "restricted_random_waypoint",
+    "max_speed_m_per_s": 2.0,
+    "pause_time_s_min": 60,
+    "pause_time_s_max": 120,
+    "auv_fraction": 0.3,
+    "sensor_fraction": 0.7
+  },
+
+  "monitoring": {
+    "interval_s": 30,
+    "sequence_length_K": 64,
+    "trust_threshold_tau_min": 0.65,
+    "smoothing_factor_alpha": 0.8
+  },
+
+  "simulation": {
+    "total_intervals": 20,
+    "num_runs": 30,
+    "random_seed_base": 42
+  },
+
+  "adversarial_attacks": {
+    "types": [
+      "selective_packet_drop",
+      "route_manipulation",
+      "transmission_burst",
+      "coordinated_insider"
+    ],
+    "drop_rate": 0.4,
+    "burst_multiplier": 3.0
+  },
+
+  "baselines": {
+    "static_trust": true,
+    "bayesian_trust": true,
+    "bayesian_prior_alpha": 1.0,
+    "bayesian_prior_beta": 1.0
+  }
+}

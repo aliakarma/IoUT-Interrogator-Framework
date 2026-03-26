@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# PyTorch checkpoints (large binaries — track with Git LFS if needed)
+model/checkpoints/*.pt
+model/checkpoints/*.pth
+model/checkpoints/*.bin
+
+# Generated data (reproducible from scripts)
+data/raw/*.csv
+data/processed/*.csv
+data/raw/*.json
+data/processed/*.json
+
+# Generated plots (reproducible from scripts)
+analysis/plots/*.png
+analysis/plots/*.pdf
+analysis/plots/*.svg
+
+# Generated simulation outputs (reproducible from scripts)
+simulation/outputs/*.csv
+simulation/outputs/*.json
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.coveragerc
+
+# Logs
+*.log
+logs/
+
+# Docker
+.dockerignore
+
+# Environment files
+.env
+.env.local
+
+# OS
+Thumbs.db
