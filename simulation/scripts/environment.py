@@ -354,14 +354,18 @@ class IoUTEnvironment:
         return a / (a + b)
 
     def _build_padded_window(self, history: List[np.ndarray], seq_len: int = 64) -> np.ndarray:
-        """Left-pad behavioral history to fixed sequence length for model inference."""
+        """Pad behavioral history to fixed sequence length for model inference."""
         if len(history) >= seq_len:
             return np.array(history[-seq_len:], dtype=np.float32)
 
         feat_dim = history[0].shape[0] if history else 5
-        pad = np.zeros((seq_len - len(history), feat_dim), dtype=np.float32)
         if history:
-            return np.vstack([pad, np.array(history, dtype=np.float32)])
+            pad_value = np.array(history[-1], dtype=np.float32)
+            pad = np.repeat(pad_value[None, :], seq_len - len(history), axis=0)
+        else:
+            pad = np.zeros((seq_len, feat_dim), dtype=np.float32)
+        if history:
+            return np.vstack([np.array(history, dtype=np.float32), pad])
         return pad
 
     # ------------------------------------------------------------------

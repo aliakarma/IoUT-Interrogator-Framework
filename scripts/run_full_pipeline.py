@@ -27,17 +27,45 @@ def step(label: str):
     print(f"{'='*60}")
 
 
+def _parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    value = str(value).strip().lower()
+    if value in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Full IoUT reproducibility pipeline")
     parser.add_argument("--seed",     type=int, default=42)
-    parser.add_argument("--runs",     type=int, default=5,
+    parser.add_argument("--runs",     type=int, default=30,
                         help="Number of simulation runs (30 for paper results)")
     parser.add_argument("--intervals",type=int, default=20)
     parser.add_argument("--skip-training", action="store_true",
                         help="Skip model training (useful if checkpoint exists)")
-    parser.add_argument("--simulation-use-transformer", action="store_true",
-                        help="Use transformer trust scores inside simulation loop.")
+    parser.add_argument(
+        "--use-transformer",
+        type=_parse_bool,
+        nargs="?",
+        const=True,
+        default=True,
+        help="Enable transformer trust scores inside simulation loop (default: True).",
+    )
+    parser.add_argument(
+        "--simulation-use-transformer",
+        type=_parse_bool,
+        nargs="?",
+        const=True,
+        default=None,
+        help="Deprecated alias for --use-transformer.",
+    )
     args = parser.parse_args()
+
+    if args.simulation_use_transformer is not None:
+        args.use_transformer = args.simulation_use_transformer
 
     t0 = time.time()
 
@@ -81,9 +109,11 @@ def main():
         "--intervals", str(args.intervals),
         "--output", "simulation/outputs/results.csv",
     ]
-    if args.simulation_use_transformer:
+    if args.use_transformer:
         _sys.argv += [
             "--use-transformer",
+            "True",
+            "--no-quantized-transformer",
             "--checkpoint", "model/checkpoints/best_model.pt",
             "--model-config", "model/configs/transformer_config.json",
         ]

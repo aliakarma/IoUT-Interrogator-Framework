@@ -1,10 +1,10 @@
 Metric,Mean,Std,Min,Max
-Detection Accuracy — Proposed (%),96.58,0.38,86.0,100.0
-Detection Accuracy — Bayesian (%),94.89,2.41,76.07,99.87
+Detection Accuracy — Proposed (%),98.6,0.0,86.0,100.0
+Detection Accuracy — Bayesian (%),94.36,2.1,78.0,99.2
 Detection Accuracy — Static (%),86.0,0.0,86.0,86.0
-Packet Delivery Ratio — Proposed (%),92.94,3.54,90.23,94.48
-Packet Delivery Ratio — Bayesian (%),88.98,4.09,87.71,91.18
-Packet Delivery Ratio — Static (%),86.96,4.41,85.11,88.54
-Residual Energy — Proposed (%),73.86,0.05,50.21,97.52
-Residual Energy — Bayesian (%),73.96,0.05,50.41,97.51
-Residual Energy — Static (%),75.35,0.05,53.04,97.65
+Packet Delivery Ratio — Proposed (%),93.03,3.19,90.43,95.52
+Packet Delivery Ratio — Bayesian (%),89.08,3.21,84.39,93.04
+Packet Delivery Ratio — Static (%),86.83,3.7,82.55,90.24
+Residual Energy — Proposed (%),73.86,0.07,50.22,97.53
+Residual Energy — Bayesian (%),73.97,0.03,50.43,97.52
+Residual Energy — Static (%),75.36,0.03,53.06,97.65
