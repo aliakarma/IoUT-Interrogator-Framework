@@ -28,7 +28,7 @@ def main():
     # Delegate to full pipeline with paper-matching parameters
     os.system(
         f"python scripts/run_full_pipeline.py "
-        f"--seed {args.seed} --runs {args.runs} --intervals 20"
+        f"--seed {args.seed} --runs {args.runs} --intervals 20 --use-transformer True"
     )
 
 

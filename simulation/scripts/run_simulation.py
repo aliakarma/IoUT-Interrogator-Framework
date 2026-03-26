@@ -25,6 +25,17 @@ from simulation.scripts.environment import IoUTEnvironment
 from model.inference.transformer_model import load_model, compute_trust_score
 
 
+def _parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    value = str(value).strip().lower()
+    if value in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "f", "no", "n", "off"}:
+        return False
+    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+
+
 def run_single_simulation(config_path: str, seed: int,
                            num_intervals: int = 20,
                            use_transformer: bool = False,
@@ -38,15 +49,38 @@ def run_single_simulation(config_path: str, seed: int,
     transformer_trust_fn = None
     sequence_len = 64
     if use_transformer:
-        model = load_model(
-            checkpoint_path=checkpoint_path,
-            config_path=model_config_path,
-            quantized=quantized,
-        )
+        model = None
+
+        def _load(quant_flag: bool):
+            return load_model(
+                checkpoint_path=checkpoint_path,
+                config_path=model_config_path,
+                quantized=quant_flag,
+            )
+
+        try:
+            model = _load(quantized)
+        except Exception:
+            if quantized:
+                print("Warning: quantized transformer load failed; retrying without quantization.")
+                model = _load(False)
+            else:
+                raise
 
         with open(model_config_path, "r") as cfg_f:
             model_cfg = json.load(cfg_f)
         sequence_len = int(model_cfg["architecture"]["seq_len"])
+
+        # Validate model forward path once and fallback if quantized runtime is incompatible.
+        try:
+            _dummy = np.zeros((sequence_len, 5), dtype=np.float32)
+            _ = compute_trust_score(model, _dummy, temperature=temperature)
+        except Exception:
+            if quantized:
+                print("Warning: quantized transformer runtime incompatible in simulation; using non-quantized model.")
+                model = _load(False)
+            else:
+                raise
 
         def _trust_fn(sequence_window: np.ndarray) -> float:
             return compute_trust_score(
@@ -113,8 +147,11 @@ def main():
     )
     parser.add_argument(
         "--use-transformer",
-        action="store_true",
-        help="Use trained transformer trust function instead of heuristic trust.",
+        type=_parse_bool,
+        nargs="?",
+        const=True,
+        default=True,
+        help="Use trained transformer trust function instead of heuristic trust (default: True).",
     )
     parser.add_argument(
         "--checkpoint",
