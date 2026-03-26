@@ -23,6 +23,15 @@ METRICS = [
     ("Detection Accuracy — Proposed (%)",  "accuracy_proposed"),
     ("Detection Accuracy — Bayesian (%)",  "accuracy_bayesian"),
     ("Detection Accuracy — Static (%)",    "accuracy_static"),
+    ("Precision — Proposed (%)",           "precision_proposed"),
+    ("Precision — Bayesian (%)",           "precision_bayesian"),
+    ("Precision — Static (%)",             "precision_static"),
+    ("Recall — Proposed (%)",              "recall_proposed"),
+    ("Recall — Bayesian (%)",              "recall_bayesian"),
+    ("Recall — Static (%)",                "recall_static"),
+    ("F1 Score — Proposed (%)",            "f1_proposed"),
+    ("F1 Score — Bayesian (%)",            "f1_bayesian"),
+    ("F1 Score — Static (%)",              "f1_static"),
     ("Packet Delivery Ratio — Proposed (%)", "pdr_proposed"),
     ("Packet Delivery Ratio — Bayesian (%)", "pdr_bayesian"),
     ("Packet Delivery Ratio — Static (%)",   "pdr_static"),
@@ -50,34 +59,20 @@ def compute_summary(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def generate_synthetic_summary() -> pd.DataFrame:
-    """Return summary matching paper-reported values when no CSV is available."""
-    rows = [
-        ("Detection Accuracy — Proposed (%)",    94.2, 0.8,  79.1,  94.2),
-        ("Detection Accuracy — Bayesian (%)",    86.1, 1.2,  75.6,  86.1),
-        ("Detection Accuracy — Static (%)",      72.5, 0.5,  70.3,  73.4),
-        ("Packet Delivery Ratio — Proposed (%)", 91.6, 0.6,  89.3,  91.6),
-        ("Packet Delivery Ratio — Bayesian (%)", 86.7, 0.9,  84.9,  86.7),
-        ("Packet Delivery Ratio — Static (%)",   79.4, 0.4,  79.4,  80.5),
-        ("Residual Energy — Proposed (%)",       46.9, 0.3,  46.9,  96.8),
-        ("Residual Energy — Bayesian (%)",       47.8, 0.3,  47.8,  96.8),
-        ("Residual Energy — Static (%)",         52.5, 0.2,  52.5,  96.8),
-    ]
-    return pd.DataFrame(rows, columns=["Metric", "Mean", "Std", "Min", "Max"])
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input",  default="simulation/outputs/results.csv")
     parser.add_argument("--output", default="analysis/stats/summary_table.csv")
     args = parser.parse_args()
 
-    if os.path.exists(args.input):
-        df = pd.read_csv(args.input)
-        summary = compute_summary(df)
-    else:
-        print(f"Input not found ({args.input}). Using paper-reported values.")
-        summary = generate_synthetic_summary()
+    if not os.path.exists(args.input):
+        raise FileNotFoundError(
+            f"Results CSV not found: {args.input}. "
+            "Run the simulation pipeline first: python scripts/run_full_pipeline.py"
+        )
+
+    df = pd.read_csv(args.input)
+    summary = compute_summary(df)
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     summary.to_csv(args.output, index=False)

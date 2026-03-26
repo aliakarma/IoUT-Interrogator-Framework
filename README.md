@@ -119,6 +119,12 @@ All experiments use fixed random seeds for reproducibility. To fully reproduce a
 python scripts/reproduce_all.py --seed 42 --runs 30
 ```
 
+To run threshold sensitivity and sequence-length ablation studies:
+
+```bash
+python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
+```
+
 See [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) for detailed step-by-step instructions, hardware requirements, and expected runtimes.
 
 ---
