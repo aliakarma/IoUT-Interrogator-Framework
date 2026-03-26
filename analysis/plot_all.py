@@ -43,7 +43,7 @@ def main():
 
     # Ablation figure
     from analysis.plot_ablation import plot_ablation
-    plot_ablation(os.path.join(args.outdir, "ablation_study.png"))
+    plot_ablation(args.input, os.path.join(args.outdir, "ablation_study.png"))
 
     # Calibration diagnostics (optional; requires inference output)
     if os.path.exists(args.trust_csv):

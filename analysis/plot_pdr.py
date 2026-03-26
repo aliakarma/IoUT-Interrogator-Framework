@@ -11,7 +11,6 @@ Usage:
 
 import argparse
 import os
-import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -21,28 +20,13 @@ PAPER_RESULTS = {"proposed": 91.6, "bayesian": 86.7, "static": 79.4}
 
 
 def load_or_generate_data(input_path: str) -> pd.DataFrame:
-    if os.path.exists(input_path):
-        print(f"Loading simulation data from: {input_path}")
-        return pd.read_csv(input_path)
-
-    print(f"Generating synthetic PDR data matching paper-reported values...")
-    intervals = np.arange(1, 21)
-    rng = np.random.default_rng(42)
-
-    proposed_mean = 89.3 + (91.6 - 89.3) * (1 - np.exp(-0.15 * intervals))
-    bayesian_mean = 84.9 + (86.7 - 84.9) * (1 - np.exp(-0.12 * intervals))
-    static_mean   = 79.4 + (80.5 - 79.4) * (1 - np.exp(-0.10 * intervals))
-
-    df = pd.DataFrame({
-        "interval": intervals,
-        "pdr_proposed_mean": np.clip(proposed_mean, 0, 100),
-        "pdr_proposed_std":  rng.uniform(0.2, 0.6, len(intervals)),
-        "pdr_bayesian_mean": np.clip(bayesian_mean, 0, 100),
-        "pdr_bayesian_std":  rng.uniform(0.3, 0.7, len(intervals)),
-        "pdr_static_mean":   np.clip(static_mean, 0, 100),
-        "pdr_static_std":    rng.uniform(0.2, 0.5, len(intervals)),
-    })
-    return df
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(
+            f"Simulation output not found: {input_path}. "
+            "Run simulation/scripts/run_simulation.py first."
+        )
+    print(f"Loading simulation data from: {input_path}")
+    return pd.read_csv(input_path)
 
 
 def plot_pdr(df: pd.DataFrame, output_path: str):

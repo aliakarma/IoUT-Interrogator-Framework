@@ -1,8 +1,7 @@
 """
 Plot: Ablation Study (Table 3 / Section VI.E)
 ===============================================
-Visualises the three-configuration ablation results as grouped bar charts.
-Values are taken directly from Table 3 of the paper (no fabricated data).
+Visualises ablation-style comparison as grouped bars from simulation output.
 
 Usage:
     python analysis/plot_ablation.py \
@@ -15,27 +14,56 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 
-# Values from Table 3 of the paper — do not modify
-ABLATION_DATA = {
-    "configs":  ["A\n(Static Auth)", "B\n(+ Bayesian Trust)", "C\n(+ Transformer\n+ Blockchain)"],
-    "accuracy": [72.5, 86.1, 94.2],
-    "pdr":      [79.4, 86.7, 91.6],
-}
+def load_ablation_data(input_path: str) -> dict:
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(
+            f"Simulation output not found: {input_path}. "
+            "Run simulation/scripts/run_simulation.py first."
+        )
+
+    df = pd.read_csv(input_path)
+    required = [
+        "accuracy_static_mean", "accuracy_bayesian_mean", "accuracy_proposed_mean",
+        "pdr_static_mean", "pdr_bayesian_mean", "pdr_proposed_mean",
+    ]
+    for col in required:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column in {input_path}: {col}")
+
+    return {
+        "configs": [
+            "A\n(Static Auth)",
+            "B\n(+ Bayesian Trust)",
+            "C\n(+ Transformer\n+ Blockchain)",
+        ],
+        "accuracy": [
+            float(df["accuracy_static_mean"].iloc[-1]),
+            float(df["accuracy_bayesian_mean"].iloc[-1]),
+            float(df["accuracy_proposed_mean"].iloc[-1]),
+        ],
+        "pdr": [
+            float(df["pdr_static_mean"].iloc[-1]),
+            float(df["pdr_bayesian_mean"].iloc[-1]),
+            float(df["pdr_proposed_mean"].iloc[-1]),
+        ],
+    }
 
 
-def plot_ablation(output_path: str):
-    x = np.arange(len(ABLATION_DATA["configs"]))
+def plot_ablation(input_path: str, output_path: str):
+    ablation_data = load_ablation_data(input_path)
+    x = np.arange(len(ablation_data["configs"]))
     width = 0.35
 
     fig, ax = plt.subplots(figsize=(9, 5))
 
-    bars_acc = ax.bar(x - width / 2, ABLATION_DATA["accuracy"], width,
+    bars_acc = ax.bar(x - width / 2, ablation_data["accuracy"], width,
                       label="Detection Accuracy (%)",
                       color=["#aec7e8", "#6baed6", "#2171b5"],
                       edgecolor="white", linewidth=0.8, zorder=3)
-    bars_pdr = ax.bar(x + width / 2, ABLATION_DATA["pdr"], width,
+    bars_pdr = ax.bar(x + width / 2, ablation_data["pdr"], width,
                       label="Packet Delivery Ratio (%)",
                       color=["#a1d99b", "#41ab5d", "#006d2c"],
                       edgecolor="white", linewidth=0.8, zorder=3)
@@ -53,23 +81,12 @@ def plot_ablation(output_path: str):
                 f"{h:.1f}%", ha="center", va="bottom", fontsize=9.5,
                 fontweight="bold", color="#1a1a1a")
 
-    # Marginal gain annotations
-    ax.annotate("", xy=(x[1] - width / 2, 87.5), xytext=(x[0] - width / 2, 87.5),
-                arrowprops=dict(arrowstyle="->", color="#333333", lw=1.2))
-    ax.text((x[0] + x[1]) / 2 - width / 2, 88.5, "+13.6%",
-            ha="center", fontsize=8.5, color="#333333")
-
-    ax.annotate("", xy=(x[2] - width / 2, 95.5), xytext=(x[1] - width / 2, 95.5),
-                arrowprops=dict(arrowstyle="->", color="#333333", lw=1.2))
-    ax.text((x[1] + x[2]) / 2 - width / 2, 96.5, "+8.1%",
-            ha="center", fontsize=8.5, color="#333333")
-
     ax.set_xlabel("Ablation Configuration", fontsize=12)
     ax.set_ylabel("Performance (%)", fontsize=12)
     ax.set_title("Ablation Study — Component-Wise Performance Attribution",
                  fontsize=13, fontweight="bold")
     ax.set_xticks(x)
-    ax.set_xticklabels(ABLATION_DATA["configs"], fontsize=10)
+    ax.set_xticklabels(ablation_data["configs"], fontsize=10)
     ax.set_ylim(65, 102)
     ax.grid(True, axis="y", alpha=0.3, linestyle="--", zorder=0)
     ax.legend(fontsize=10, loc="lower right", framealpha=0.9)
@@ -86,9 +103,10 @@ def plot_ablation(output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--input", default="simulation/outputs/results.csv")
     parser.add_argument("--output", default="analysis/plots/ablation_study.png")
     args = parser.parse_args()
-    plot_ablation(args.output)
+    plot_ablation(args.input, args.output)
 
 
 if __name__ == "__main__":

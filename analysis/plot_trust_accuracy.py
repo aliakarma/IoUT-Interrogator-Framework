@@ -2,8 +2,7 @@
 Plot: Anomaly Detection Accuracy (Figure 4)
 =============================================
 Reproduces the trust accuracy comparison figure from the paper.
-Reads from simulation/outputs/results.csv or generates synthetic data
-that matches reported values if the file is not present.
+Reads strictly from simulation/outputs/results.csv.
 
 Usage:
     python analysis/plot_trust_accuracy.py \
@@ -14,7 +13,6 @@ Usage:
 import argparse
 import os
 import sys
-import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -30,37 +28,14 @@ PAPER_RESULTS = {
 
 
 def load_or_generate_data(input_path: str) -> pd.DataFrame:
-    """Load simulation results CSV or generate synthetic data matching paper values."""
-    if os.path.exists(input_path):
-        print(f"Loading simulation data from: {input_path}")
-        return pd.read_csv(input_path)
-
-    print(f"Simulation output not found ({input_path}). "
-          "Generating synthetic data matching paper-reported values...")
-
-    intervals = np.arange(1, 21)
-    rng = np.random.default_rng(42)
-
-    # Synthetic trajectories calibrated to paper's reported means
-    proposed_mean = 79 + (94.2 - 79) * (1 - np.exp(-0.18 * intervals))
-    proposed_std  = rng.uniform(0.3, 0.8, len(intervals))
-
-    bayesian_mean = 75.5 + (86.1 - 75.5) * (1 - np.exp(-0.12 * intervals))
-    bayesian_std  = rng.uniform(0.4, 1.0, len(intervals))
-
-    static_mean   = 70.3 + (72.5 - 70.3) * (1 - np.exp(-0.10 * intervals))
-    static_std    = rng.uniform(0.2, 0.5, len(intervals))
-
-    df = pd.DataFrame({
-        "interval": intervals,
-        "accuracy_proposed_mean": np.clip(proposed_mean, 0, 100),
-        "accuracy_proposed_std":  proposed_std,
-        "accuracy_bayesian_mean": np.clip(bayesian_mean, 0, 100),
-        "accuracy_bayesian_std":  bayesian_std,
-        "accuracy_static_mean":   np.clip(static_mean, 0, 100),
-        "accuracy_static_std":    static_std,
-    })
-    return df
+    """Load simulation results CSV; fail fast if it is missing."""
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(
+            f"Simulation output not found: {input_path}. "
+            "Run simulation/scripts/run_simulation.py first."
+        )
+    print(f"Loading simulation data from: {input_path}")
+    return pd.read_csv(input_path)
 
 
 def plot_trust_accuracy(df: pd.DataFrame, output_path: str):

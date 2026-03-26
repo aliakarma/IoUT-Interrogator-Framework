@@ -27,6 +27,7 @@ import argparse
 import json
 import os
 import sys
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -46,7 +47,7 @@ def _pad_or_truncate_sequence(seq_list, seq_len: int) -> np.ndarray:
     return seq
 
 
-def _select_calibration_subset(sequences: list, min_per_class: int = 20) -> tuple[list, dict]:
+def _select_calibration_subset(sequences: list, min_per_class: int = 20) -> Tuple[list, dict]:
     legit = [item for item in sequences if item.get("label", -1) == 0]
     adv = [item for item in sequences if item.get("label", -1) == 1]
 

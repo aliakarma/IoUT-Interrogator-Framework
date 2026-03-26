@@ -22,13 +22,46 @@ from tqdm import tqdm
 # Allow running from repository root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from simulation.scripts.environment import IoUTEnvironment
+from model.inference.transformer_model import load_model, compute_trust_score
 
 
 def run_single_simulation(config_path: str, seed: int,
-                           num_intervals: int = 20) -> dict:
+                           num_intervals: int = 20,
+                           use_transformer: bool = False,
+                           checkpoint_path: str = "model/checkpoints/best_model.pt",
+                           model_config_path: str = "model/configs/transformer_config.json",
+                           temperature: float = 1.5,
+                           quantized: bool = True) -> dict:
     """Run one simulation trial and return interval-level results."""
     env = IoUTEnvironment(config_path=config_path, seed=seed)
-    return env.run(num_intervals=num_intervals)
+
+    transformer_trust_fn = None
+    sequence_len = 64
+    if use_transformer:
+        model = load_model(
+            checkpoint_path=checkpoint_path,
+            config_path=model_config_path,
+            quantized=quantized,
+        )
+
+        with open(model_config_path, "r") as cfg_f:
+            model_cfg = json.load(cfg_f)
+        sequence_len = int(model_cfg["architecture"]["seq_len"])
+
+        def _trust_fn(sequence_window: np.ndarray) -> float:
+            return compute_trust_score(
+                model,
+                sequence_window,
+                temperature=temperature,
+            )
+
+        transformer_trust_fn = _trust_fn
+
+    return env.run(
+        num_intervals=num_intervals,
+        transformer_trust_fn=transformer_trust_fn,
+        sequence_len=sequence_len,
+    )
 
 
 def aggregate_runs(all_results: list) -> pd.DataFrame:
@@ -78,6 +111,32 @@ def main():
         default="simulation/outputs/results.csv",
         help="Output CSV path"
     )
+    parser.add_argument(
+        "--use-transformer",
+        action="store_true",
+        help="Use trained transformer trust function instead of heuristic trust.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default="model/checkpoints/best_model.pt",
+        help="Transformer checkpoint path (used when --use-transformer is set).",
+    )
+    parser.add_argument(
+        "--model-config",
+        default="model/configs/transformer_config.json",
+        help="Transformer config path (used when --use-transformer is set).",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=1.5,
+        help="Temperature for trust score calibration when using transformer.",
+    )
+    parser.add_argument(
+        "--no-quantized-transformer",
+        action="store_true",
+        help="Disable dynamic INT8 quantization in simulation inference path.",
+    )
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -87,6 +146,7 @@ def main():
     print(f"  Runs:      {args.runs}")
     print(f"  Intervals: {args.intervals}")
     print(f"  Base seed: {args.seed}")
+    print(f"  Use transformer trust: {args.use_transformer}")
     print(f"  Output:    {args.output}")
     print()
 
@@ -96,7 +156,12 @@ def main():
         result = run_single_simulation(
             config_path=args.config,
             seed=seed,
-            num_intervals=args.intervals
+            num_intervals=args.intervals,
+            use_transformer=args.use_transformer,
+            checkpoint_path=args.checkpoint,
+            model_config_path=args.model_config,
+            temperature=args.temperature,
+            quantized=not args.no_quantized_transformer,
         )
         all_results.append(result)
 

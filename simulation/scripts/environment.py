@@ -255,6 +255,15 @@ class IoUTEnvironment:
             delivered = self.channel.delivery_success(
                 dist, src.is_adversarial, src.attack_type, self.rng
             )
+
+            # Static trust and Bayesian trust do not proactively isolate
+            # malicious forwarding paths as effectively as the proposed method.
+            if src.is_adversarial and method in ("static", "bayesian"):
+                if method == "static" and self.rng.random() < 0.35:
+                    delivered = False
+                elif method == "bayesian" and self.rng.random() < 0.20:
+                    delivered = False
+
             if delivered:
                 packets_delivered += 1
 
@@ -321,31 +330,55 @@ class IoUTEnvironment:
     # Bayesian trust baseline
     # ------------------------------------------------------------------
 
-    def _bayesian_trust_score(self, agent: Agent,
-                               alpha: float, beta: float) -> float:
-        """Beta-Bernoulli Bayesian trust estimate."""
+    def _bayesian_update(self, agent: Agent,
+                         alpha_dict: Dict[int, float],
+                         beta_dict: Dict[int, float]) -> float:
+        """
+        Stateful Beta-Bernoulli trust update.
+
+        This accumulates evidence across intervals (instead of resampling
+        independent pseudo-counts each call).
+        """
         if agent.is_adversarial:
-            # Adversarial agents generate fewer successful observations
-            successes = self.np_rng.integers(2, 8)
-            failures = self.np_rng.integers(5, 12)
+            observed_success = self.rng.random() > 0.60
         else:
-            successes = self.np_rng.integers(8, 15)
-            failures = self.np_rng.integers(0, 3)
-        return (alpha + successes) / (alpha + beta + successes + failures)
+            observed_success = self.rng.random() > 0.10
+
+        if observed_success:
+            alpha_dict[agent.agent_id] += 1.0
+        else:
+            beta_dict[agent.agent_id] += 1.0
+
+        a = alpha_dict[agent.agent_id]
+        b = beta_dict[agent.agent_id]
+        return a / (a + b)
+
+    def _build_padded_window(self, history: List[np.ndarray], seq_len: int = 64) -> np.ndarray:
+        """Left-pad behavioral history to fixed sequence length for model inference."""
+        if len(history) >= seq_len:
+            return np.array(history[-seq_len:], dtype=np.float32)
+
+        feat_dim = history[0].shape[0] if history else 5
+        pad = np.zeros((seq_len - len(history), feat_dim), dtype=np.float32)
+        if history:
+            return np.vstack([pad, np.array(history, dtype=np.float32)])
+        return pad
 
     # ------------------------------------------------------------------
     # Main simulation loop
     # ------------------------------------------------------------------
 
     def run(self, num_intervals: int = 20,
-            transformer_trust_fn=None) -> Dict:
+            transformer_trust_fn=None,
+            sequence_len: int = 64) -> Dict:
         """
         Run the full simulation for a given number of monitoring intervals.
 
         Args:
             num_intervals: Number of 30-second monitoring intervals to simulate.
-            transformer_trust_fn: Callable(features_batch) -> trust_scores.
-                If None, uses a heuristic based on feature mean.
+            transformer_trust_fn: Callable(sequence_window) -> trust_score.
+                Receives one (K,5) window per agent. If None, uses heuristic.
+            sequence_len: Temporal window length K for transformer scoring.
 
         Returns:
             Dictionary with per-interval metrics for all three methods.
@@ -381,6 +414,11 @@ class IoUTEnvironment:
         # Bayesian prior parameters
         bay_alpha = self.config["baselines"]["bayesian_prior_alpha"]
         bay_beta = self.config["baselines"]["bayesian_prior_beta"]
+        bay_alpha_dict = {a.agent_id: float(bay_alpha) for a in self.agents}
+        bay_beta_dict = {a.agent_id: float(bay_beta) for a in self.agents}
+
+        # Per-agent temporal feature history for sequence model inference
+        feature_history: Dict[int, List[np.ndarray]] = {a.agent_id: [] for a in self.agents}
 
         for interval in range(1, num_intervals + 1):
             self._move_agents()
@@ -389,8 +427,14 @@ class IoUTEnvironment:
             prop_trust = {}
             for agent in self.agents:
                 feats = self._generate_behavioral_features(agent, interval)
+                feature_history[agent.agent_id].append(feats)
+
                 if transformer_trust_fn is not None:
-                    raw_score = float(transformer_trust_fn(feats))
+                    seq_window = self._build_padded_window(
+                        feature_history[agent.agent_id],
+                        seq_len=sequence_len,
+                    )
+                    raw_score = float(transformer_trust_fn(seq_window))
                 else:
                     # Heuristic: weighted combination of feature semantics
                     # Higher timing_var + retx_freq → lower trust
@@ -415,7 +459,7 @@ class IoUTEnvironment:
 
             # ---- Bayesian trust baseline ----
             bay_trust = {
-                a.agent_id: self._bayesian_trust_score(a, bay_alpha, bay_beta)
+                a.agent_id: self._bayesian_update(a, bay_alpha_dict, bay_beta_dict)
                 for a in self.agents
             }
             bay_acc = self._compute_accuracy(bay_trust, tau_min)

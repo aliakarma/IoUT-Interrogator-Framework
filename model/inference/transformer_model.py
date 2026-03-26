@@ -747,6 +747,7 @@ def train_model(
 def load_model(
     checkpoint_path: str,
     config_path: str = "model/configs/transformer_config.json",
+    quantized: bool = True,
 ) -> TrustTransformer:
     """Load trained model from checkpoint."""
     with open(config_path) as f:
@@ -755,8 +756,22 @@ def load_model(
     model.load_state_dict(
         torch.load(checkpoint_path, weights_only=True, map_location="cpu")
     )
+    quant_cfg = config.get("quantization", {})
+    use_quant = bool(quantized and quant_cfg.get("enabled", False))
+    if use_quant:
+        model = quantize_model(model)
     model.eval()
     return model
+
+
+def quantize_model(model: nn.Module) -> nn.Module:
+    """Apply dynamic INT8 quantization to linear layers for CPU inference."""
+    model.eval()
+    return torch.quantization.quantize_dynamic(
+        model,
+        {nn.Linear},
+        dtype=torch.qint8,
+    )
 
 
 def compute_trust_score(

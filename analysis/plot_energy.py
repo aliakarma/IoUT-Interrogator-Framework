@@ -11,7 +11,6 @@ Usage:
 
 import argparse
 import os
-import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
@@ -19,33 +18,13 @@ import matplotlib.pyplot as plt
 
 
 def load_or_generate_data(input_path: str) -> pd.DataFrame:
-    if os.path.exists(input_path):
-        print(f"Loading simulation data from: {input_path}")
-        return pd.read_csv(input_path)
-
-    print(f"Generating synthetic energy data matching paper-reported values...")
-    intervals = np.arange(1, 21)
-    rng = np.random.default_rng(42)
-
-    # Linear depletion trajectories — static depletes slowest, proposed ~5.8% more
-    static_start, static_end     = 96.8, 52.5
-    bayesian_start, bayesian_end = 96.8, 47.8  # ~5.8% more than static
-    proposed_start, proposed_end = 96.8, 46.9  # ~5.8% overhead
-
-    static_mean   = np.linspace(static_start, static_end, len(intervals))
-    bayesian_mean = np.linspace(bayesian_start, bayesian_end, len(intervals))
-    proposed_mean = np.linspace(proposed_start, proposed_end, len(intervals))
-
-    df = pd.DataFrame({
-        "interval": intervals,
-        "energy_proposed_mean": proposed_mean + rng.uniform(-0.1, 0.1, len(intervals)),
-        "energy_proposed_std":  rng.uniform(0.1, 0.3, len(intervals)),
-        "energy_bayesian_mean": bayesian_mean + rng.uniform(-0.1, 0.1, len(intervals)),
-        "energy_bayesian_std":  rng.uniform(0.1, 0.3, len(intervals)),
-        "energy_static_mean":   static_mean + rng.uniform(-0.1, 0.1, len(intervals)),
-        "energy_static_std":    rng.uniform(0.1, 0.2, len(intervals)),
-    })
-    return df
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(
+            f"Simulation output not found: {input_path}. "
+            "Run simulation/scripts/run_simulation.py first."
+        )
+    print(f"Loading simulation data from: {input_path}")
+    return pd.read_csv(input_path)
 
 
 def plot_energy(df: pd.DataFrame, output_path: str):
