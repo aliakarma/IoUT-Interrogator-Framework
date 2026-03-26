@@ -101,9 +101,7 @@ class TrustTransformer(nn.Module):
         self.num_heads  = arch["num_heads"]
         self.num_layers = arch["num_layers"]
         self.d_ff       = arch["d_ff"]
-        # Calibration/regularization fix: use at least 0.30 dropout to reduce
-        # overconfident logit saturation while keeping architecture unchanged.
-        self.dropout_p  = max(float(arch.get("dropout", 0.2)), 0.30)
+        self.dropout_p  = float(arch.get("dropout", 0.2))
 
         self.input_proj = nn.Linear(self.input_dim, self.d_model)
         self.pos_enc    = PositionalEncoding(
@@ -645,7 +643,7 @@ def train_model(
         print(f"\nClass balance: {n_legit} legit, {n_adv} adv → "
               f"pos_weight={pos_weight:.2f}  "
               f"(lr={config['training']['learning_rate']}, "
-              f"dropout_effective={max(config['architecture']['dropout'], 0.30)}, "
+              f"dropout_effective={config['architecture']['dropout']}, "
               f"label_smoothing={label_smoothing}, "
               f"wd_effective={weight_decay})")
 
@@ -679,7 +677,11 @@ def train_model(
             debug=(epoch == 1 and verbose),
         )
         val_loss, val_acc, val_prec, val_rec = evaluate(
-            model, val_loader, criterion, tau_min=tau_min, temperature=1.0
+            model,
+            val_loader,
+            criterion,
+            tau_min=tau_min,
+            temperature=inference_temperature,
         )
         scheduler.step(val_loss)
 
@@ -711,7 +713,11 @@ def train_model(
                    weights_only=True)
     )
     test_loss, test_acc, test_prec, test_rec = evaluate(
-        model, test_loader, criterion, tau_min=tau_min, temperature=1.0
+        model,
+        test_loader,
+        criterion,
+        tau_min=tau_min,
+        temperature=inference_temperature,
     )
     f1 = (2 * test_prec * test_rec) / (test_prec + test_rec + 1e-8)
 

@@ -6,7 +6,7 @@
     "energy: battery_J removed — energy is now tracked as % drain directly",
     "energy: drain_noise_std_pct added for realistic run-to-run variation"
   ],
-  "_note": "Parameters match the NS-3 Aqua-Sim prototype described in the paper (Section V).",
+  "_note": "Parameters approximate the NS-3 Aqua-Sim prototype as a high-fidelity Python proxy (Section V mapping).",
 
   "network": {
     "num_agents": 50,

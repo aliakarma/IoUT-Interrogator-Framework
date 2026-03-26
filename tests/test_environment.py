@@ -175,8 +175,17 @@ class TestIoUTEnvironment:
         for key in ["interval", "accuracy_proposed", "accuracy_bayesian",
                     "accuracy_static", "pdr_proposed", "pdr_bayesian",
                     "pdr_static", "energy_proposed", "energy_bayesian",
-                    "energy_static"]:
+                    "energy_static", "precision_proposed", "precision_bayesian",
+                    "precision_static", "recall_proposed", "recall_bayesian",
+                    "recall_static", "f1_proposed", "f1_bayesian",
+                    "f1_static", "tp_proposed", "tn_proposed",
+                    "fp_proposed", "fn_proposed"]:
             assert key in res, f"Missing key: {key}"
+
+    def test_static_recall_and_f1_are_zero(self):
+        res = self.env.run(num_intervals=3)
+        assert all(v == 0.0 for v in res["recall_static"])
+        assert all(v == 0.0 for v in res["f1_static"])
 
     def test_run_interval_count(self):
         res = self.env.run(num_intervals=5)

@@ -42,9 +42,14 @@ def run_single_simulation(config_path: str, seed: int,
                            checkpoint_path: str = "model/checkpoints/best_model.pt",
                            model_config_path: str = "model/configs/transformer_config.json",
                            temperature: float = 1.5,
-                           quantized: bool = True) -> dict:
+                           quantized: bool = True,
+                           log_trust_stats: bool = False,
+                           tau_min_override: float = None,
+                           sequence_len_override: int = None) -> dict:
     """Run one simulation trial and return interval-level results."""
     env = IoUTEnvironment(config_path=config_path, seed=seed)
+    if tau_min_override is not None:
+        env.mon_cfg["trust_threshold_tau_min"] = float(tau_min_override)
 
     transformer_trust_fn = None
     sequence_len = 64
@@ -69,7 +74,14 @@ def run_single_simulation(config_path: str, seed: int,
 
         with open(model_config_path, "r") as cfg_f:
             model_cfg = json.load(cfg_f)
-        sequence_len = int(model_cfg["architecture"]["seq_len"])
+        model_seq_len = int(model_cfg["architecture"]["seq_len"])
+        sequence_len = model_seq_len
+        if sequence_len_override is not None:
+            if int(sequence_len_override) > model_seq_len:
+                raise ValueError(
+                    f"sequence_len override {sequence_len_override} exceeds model seq_len {model_seq_len}."
+                )
+            sequence_len = int(sequence_len_override)
 
         # Validate model forward path once and fallback if quantized runtime is incompatible.
         try:
@@ -95,6 +107,7 @@ def run_single_simulation(config_path: str, seed: int,
         num_intervals=num_intervals,
         transformer_trust_fn=transformer_trust_fn,
         sequence_len=sequence_len,
+        log_trust_stats=log_trust_stats,
     )
 
 
@@ -104,11 +117,7 @@ def aggregate_runs(all_results: list) -> pd.DataFrame:
     Computes mean and standard deviation per metric per interval.
     """
     num_intervals = len(all_results[0]["interval"])
-    metrics = [
-        "accuracy_proposed", "accuracy_bayesian", "accuracy_static",
-        "pdr_proposed", "pdr_bayesian", "pdr_static",
-        "energy_proposed", "energy_bayesian", "energy_static",
-    ]
+    metrics = [k for k in all_results[0].keys() if k != "interval"]
 
     agg = {"interval": list(range(1, num_intervals + 1))}
     for metric in metrics:
@@ -174,6 +183,23 @@ def main():
         action="store_true",
         help="Disable dynamic INT8 quantization in simulation inference path.",
     )
+    parser.add_argument(
+        "--log-trust-stats",
+        action="store_true",
+        help="Print per-interval proposed trust distribution stats (mean/std/min/max).",
+    )
+    parser.add_argument(
+        "--tau-min",
+        type=float,
+        default=None,
+        help="Optional override for trust threshold tau_min.",
+    )
+    parser.add_argument(
+        "--sequence-len",
+        type=int,
+        default=None,
+        help="Optional override for transformer sequence length K.",
+    )
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -199,6 +225,9 @@ def main():
             model_config_path=args.model_config,
             temperature=args.temperature,
             quantized=not args.no_quantized_transformer,
+            log_trust_stats=args.log_trust_stats,
+            tau_min_override=args.tau_min,
+            sequence_len_override=args.sequence_len,
         )
         all_results.append(result)
 

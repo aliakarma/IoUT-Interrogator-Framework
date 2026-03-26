@@ -19,6 +19,13 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from simulation.scripts.generate_behavioral_data import (
+    _ADV_MEANS,
+    _LEGIT_MEAN,
+    AR_PHI,
+    NOISE_SIGMA,
+)
+
 
 @dataclass
 class Agent:
@@ -84,6 +91,10 @@ class IoUTEnvironment:
       - Adversarial behavior injection (4 attack types)
       - Behavioral metadata generation per monitoring interval
       - Static trust, Bayesian trust, and proposed interrogator baselines
+
+        Note:
+            This is a high-fidelity Python proxy of the NS-3 Aqua-Sim workflow,
+            not a direct packet-level NS-3 execution.
     """
 
     def __init__(self, config_path: str = "simulation/configs/simulation_params.json",
@@ -105,6 +116,47 @@ class IoUTEnvironment:
 
         self.agents: List[Agent] = []
         self._deploy_agents()
+        self._init_behavior_dynamics()
+
+    def _init_behavior_dynamics(self):
+        """Initialise per-agent temporal feature dynamics to match training data."""
+        self._ar_phi = float(AR_PHI)
+        self._noise_sigma = float(NOISE_SIGMA)
+        self._feature_mean: Dict[int, np.ndarray] = {}
+        self._feature_state: Dict[int, np.ndarray] = {}
+
+        for agent in self.agents:
+            if agent.is_adversarial:
+                base_mean = _ADV_MEANS.get(
+                    str(agent.attack_type),
+                    _ADV_MEANS["coordinated_insider"],
+                )
+                jitter_sigma = 0.05
+            else:
+                base_mean = _LEGIT_MEAN
+                jitter_sigma = 0.04
+
+            jitter = self.np_rng.normal(0.0, jitter_sigma, size=base_mean.shape).astype(np.float32)
+            mean = np.clip(base_mean + jitter, 0.05, 0.95).astype(np.float32)
+            self._feature_mean[agent.agent_id] = mean
+            self._feature_state[agent.agent_id] = mean.copy()
+
+    def _next_behavioral_vector(self, agent: Agent) -> np.ndarray:
+        """One-step mean-reverting temporal update (aligned with data generator)."""
+        mean = self._feature_mean[agent.agent_id]
+        prev = self._feature_state[agent.agent_id]
+
+        if agent.is_adversarial:
+            phi = self._ar_phi * 0.7
+            noise_sigma = self._noise_sigma * 1.3
+        else:
+            phi = self._ar_phi
+            noise_sigma = self._noise_sigma
+
+        eps = self.np_rng.normal(0.0, noise_sigma, size=mean.shape).astype(np.float32)
+        curr = np.clip(phi * prev + (1.0 - phi) * mean + eps, 0.0, 1.0).astype(np.float32)
+        self._feature_state[agent.agent_id] = curr
+        return curr
 
     # ------------------------------------------------------------------
     # Agent deployment
@@ -123,7 +175,15 @@ class IoUTEnvironment:
             x = self.rng.uniform(0, self.area_side)
             y = self.rng.uniform(0, self.area_side)
             is_adv = i in adv_ids
-            atk = self.rng.choice(attack_types) if is_adv else None
+            if is_adv:
+                # Emphasize subtle mimicry attacks to avoid unrealistically easy detection.
+                if "low_and_slow" in attack_types and self.rng.random() < 0.45:
+                    atk = "low_and_slow"
+                else:
+                    non_mimicry = [t for t in attack_types if t != "low_and_slow"]
+                    atk = self.rng.choice(non_mimicry or attack_types)
+            else:
+                atk = None
             self.agents.append(Agent(
                 agent_id=i, agent_type=atype, x=x, y=y,
                 is_adversarial=is_adv, attack_type=atk
@@ -173,50 +233,21 @@ class IoUTEnvironment:
             return self._legitimate_features(agent, interval)
 
     def _legitimate_features(self, agent: Agent, interval: int) -> np.ndarray:
-        """Legitimate agent: low variance, stable routing, compliant."""
-        timing_var = self.np_rng.beta(2, 8)           # low variance
-        retx_freq = self.np_rng.beta(1, 9)            # low retransmission
-        routing_stab = self.np_rng.beta(8, 2)         # high stability
-        neighbor_churn = self.np_rng.beta(1, 9)       # low churn
-        protocol_comp = self.np_rng.beta(9, 1)        # high compliance
-        return np.array([timing_var, retx_freq, routing_stab,
-                         neighbor_churn, protocol_comp], dtype=np.float32)
+        """Legitimate agent features with temporal dynamics matched to training data."""
+        return self._next_behavioral_vector(agent)
 
     def _adversarial_features(self, agent: Agent, interval: int) -> np.ndarray:
-        """Adversarial agent: features deviate based on attack type."""
+        """Adversarial agent features with explicit attack-type mapping."""
         atk = agent.attack_type
-        if atk == "selective_packet_drop":
-            return np.array([
-                self.np_rng.beta(4, 4),    # moderate timing variance
-                self.np_rng.beta(7, 3),    # HIGH retransmission
-                self.np_rng.beta(4, 6),    # low routing stability
-                self.np_rng.beta(2, 8),    # normal churn
-                self.np_rng.beta(6, 4),    # partial compliance
-            ], dtype=np.float32)
-        elif atk == "route_manipulation":
-            return np.array([
-                self.np_rng.beta(3, 7),
-                self.np_rng.beta(2, 8),
-                self.np_rng.beta(2, 8),    # VERY LOW routing stability
-                self.np_rng.beta(7, 3),    # HIGH neighbor churn
-                self.np_rng.beta(4, 6),
-            ], dtype=np.float32)
-        elif atk == "transmission_burst":
-            return np.array([
-                self.np_rng.beta(8, 2),    # HIGH timing variance
-                self.np_rng.beta(8, 2),    # HIGH retransmission
-                self.np_rng.beta(5, 5),
-                self.np_rng.beta(3, 7),
-                self.np_rng.beta(5, 5),
-            ], dtype=np.float32)
-        else:  # coordinated_insider — subtle deviation
-            return np.array([
-                self.np_rng.beta(4, 6),
-                self.np_rng.beta(5, 5),
-                self.np_rng.beta(5, 5),
-                self.np_rng.beta(4, 6),
-                self.np_rng.beta(4, 6),    # REDUCED compliance
-            ], dtype=np.float32)
+        if atk not in {
+            "selective_packet_drop",
+            "route_manipulation",
+            "transmission_burst",
+            "coordinated_insider",
+            "low_and_slow",
+        }:
+            agent.attack_type = "coordinated_insider"
+        return self._next_behavioral_vector(agent)
 
     # ------------------------------------------------------------------
     # Packet delivery simulation
@@ -227,12 +258,14 @@ class IoUTEnvironment:
         """
         Compute packet delivery ratio for one monitoring interval.
 
-        For the proposed method: agents below trust_threshold are excluded
-        from routing, which increases effective PDR.
+        Agents below trust threshold are isolated from forwarding for dynamic
+        methods (proposed and bayesian) and packets are rerouted with a
+        high-but-not-perfect success probability.
         """
         tau_min = self.mon_cfg["trust_threshold_tau_min"]
         packets_attempted = 0
         packets_delivered = 0
+        reroute_success_prob = 0.92
 
         for i, src in enumerate(self.agents):
             # Select a random destination agent
@@ -244,25 +277,18 @@ class IoUTEnvironment:
             packets_attempted += 1
             dist = self._distance(src, dst)
 
-            # Under proposed method: exclude low-trust agents from forwarding
-            if method == "proposed":
+            # Under dynamic methods: exclude low-trust agents from forwarding.
+            if method in ("proposed", "bayesian"):
                 score = trust_scores.get(src.agent_id, 1.0)
-                if score < tau_min and src.is_adversarial:
-                    # Agent is correctly excluded → packet rerouted (no drop)
-                    packets_delivered += 1
+                if score < tau_min:
+                    # Isolation can help or hurt depending on false positives.
+                    if self.rng.random() < reroute_success_prob:
+                        packets_delivered += 1
                     continue
 
             delivered = self.channel.delivery_success(
                 dist, src.is_adversarial, src.attack_type, self.rng
             )
-
-            # Static trust and Bayesian trust do not proactively isolate
-            # malicious forwarding paths as effectively as the proposed method.
-            if src.is_adversarial and method in ("static", "bayesian"):
-                if method == "static" and self.rng.random() < 0.35:
-                    delivered = False
-                elif method == "bayesian" and self.rng.random() < 0.20:
-                    delivered = False
 
             if delivered:
                 packets_delivered += 1
@@ -331,6 +357,7 @@ class IoUTEnvironment:
     # ------------------------------------------------------------------
 
     def _bayesian_update(self, agent: Agent,
+                         features: np.ndarray,
                          alpha_dict: Dict[int, float],
                          beta_dict: Dict[int, float]) -> float:
         """
@@ -339,10 +366,19 @@ class IoUTEnvironment:
         This accumulates evidence across intervals (instead of resampling
         independent pseudo-counts each call).
         """
-        if agent.is_adversarial:
-            observed_success = self.rng.random() > 0.60
-        else:
-            observed_success = self.rng.random() > 0.10
+        # No oracle label leakage: infer evidence only from observed behavior.
+        anomaly_risk = float(np.clip(
+            0.25 * features[0] +
+            0.25 * features[1] +
+            0.20 * (1.0 - features[2]) +
+            0.15 * features[3] +
+            0.15 * (1.0 - features[4]),
+            0.0,
+            1.0,
+        ))
+        evidence_noise = self.rng.uniform(-0.10, 0.10)
+        posterior_failure_prob = float(np.clip(anomaly_risk + evidence_noise, 0.05, 0.95))
+        observed_success = self.rng.random() > posterior_failure_prob
 
         if observed_success:
             alpha_dict[agent.agent_id] += 1.0
@@ -368,13 +404,57 @@ class IoUTEnvironment:
             return np.vstack([np.array(history, dtype=np.float32), pad])
         return pad
 
+    def _compute_detection_metrics(self, trust_scores: Dict[int, float],
+                                   tau_threshold: float) -> Dict[str, float]:
+        """Compute full confusion matrix and derived detection metrics."""
+        tp = tn = fp = fn = 0
+        for agent in self.agents:
+            score = trust_scores.get(agent.agent_id, 1.0)
+            predicted_anomalous = score < tau_threshold
+            if predicted_anomalous and agent.is_adversarial:
+                tp += 1
+            elif predicted_anomalous and (not agent.is_adversarial):
+                fp += 1
+            elif (not predicted_anomalous) and agent.is_adversarial:
+                fn += 1
+            else:
+                tn += 1
+
+        total = tp + tn + fp + fn
+        accuracy = (tp + tn) / total if total else 0.0
+        precision = tp / (tp + fp) if (tp + fp) else 0.0
+        recall = tp / (tp + fn) if (tp + fn) else 0.0
+        f1 = (2.0 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+
+        return {
+            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "tp": float(tp),
+            "tn": float(tn),
+            "fp": float(fp),
+            "fn": float(fn),
+        }
+
+    def _is_degenerate_trust(self, trust_scores: Dict[int, float]) -> bool:
+        """Detect collapsed trust distributions that indicate invalid intervals."""
+        vals = np.array(list(trust_scores.values()), dtype=np.float32)
+        if vals.size == 0:
+            return True
+        spread = float(vals.max() - vals.min())
+        std = float(vals.std())
+        return (spread < 1e-3) or (std < 1e-4)
+
     # ------------------------------------------------------------------
     # Main simulation loop
     # ------------------------------------------------------------------
 
     def run(self, num_intervals: int = 20,
             transformer_trust_fn=None,
-            sequence_len: int = 64) -> Dict:
+            sequence_len: int = 64,
+            log_trust_stats: bool = False,
+            enforce_non_degenerate: bool = True) -> Dict:
         """
         Run the full simulation for a given number of monitoring intervals.
 
@@ -392,12 +472,37 @@ class IoUTEnvironment:
             "accuracy_proposed": [],
             "accuracy_bayesian": [],
             "accuracy_static": [],
+            "precision_proposed": [],
+            "precision_bayesian": [],
+            "precision_static": [],
+            "recall_proposed": [],
+            "recall_bayesian": [],
+            "recall_static": [],
+            "f1_proposed": [],
+            "f1_bayesian": [],
+            "f1_static": [],
+            "tp_proposed": [],
+            "tp_bayesian": [],
+            "tp_static": [],
+            "tn_proposed": [],
+            "tn_bayesian": [],
+            "tn_static": [],
+            "fp_proposed": [],
+            "fp_bayesian": [],
+            "fp_static": [],
+            "fn_proposed": [],
+            "fn_bayesian": [],
+            "fn_static": [],
             "pdr_proposed": [],
             "pdr_bayesian": [],
             "pdr_static": [],
             "energy_proposed": [],
             "energy_bayesian": [],
             "energy_static": [],
+            "trust_mean_proposed": [],
+            "trust_std_proposed": [],
+            "trust_min_proposed": [],
+            "trust_max_proposed": [],
         }
 
         # Reset agent batteries at start of run
@@ -414,6 +519,7 @@ class IoUTEnvironment:
         smoothed_trust = {a.agent_id: 1.0 for a in self.agents}
         alpha_smooth = self.mon_cfg["smoothing_factor_alpha"]
         tau_min = self.mon_cfg["trust_threshold_tau_min"]
+        prop_inference_noise_std = 0.07
 
         # Bayesian prior parameters
         bay_alpha = self.config["baselines"]["bayesian_prior_alpha"]
@@ -423,6 +529,10 @@ class IoUTEnvironment:
 
         # Per-agent temporal feature history for sequence model inference
         feature_history: Dict[int, List[np.ndarray]] = {a.agent_id: [] for a in self.agents}
+
+        # Reset temporal behavioral states at run start.
+        for agent in self.agents:
+            self._feature_state[agent.agent_id] = self._feature_mean[agent.agent_id].copy()
 
         for interval in range(1, num_intervals + 1):
             self._move_agents()
@@ -458,23 +568,53 @@ class IoUTEnvironment:
                 smoothed_trust[agent.agent_id] = smoothed
                 prop_trust[agent.agent_id] = smoothed
 
-            # ---- Accuracy: proposed ----
-            prop_acc = self._compute_accuracy(prop_trust, tau_min)
+            if transformer_trust_fn is not None and log_trust_stats:
+                trust_vals = np.array(list(prop_trust.values()), dtype=np.float32)
+                print(
+                    f"[interval {interval:02d}] proposed trust: "
+                    f"mean={trust_vals.mean():.3f} std={trust_vals.std():.3f} "
+                    f"min={trust_vals.min():.3f} max={trust_vals.max():.3f}"
+                )
+
+            if enforce_non_degenerate and self._is_degenerate_trust(prop_trust):
+                raise RuntimeError(
+                    f"Degenerate trust distribution at interval {interval}. "
+                    "Rejecting run to preserve scientific validity."
+                )
+
+            interval_tau = float(np.clip(
+                tau_min + self.np_rng.normal(0.0, 0.035),
+                0.55,
+                0.78,
+            ))
+
+            # Proposed trust inference uncertainty from channel/feature noise.
+            prop_eval_trust = {
+                agent_id: float(np.clip(score + self.np_rng.normal(0.0, prop_inference_noise_std), 0.0, 1.0))
+                for agent_id, score in prop_trust.items()
+            }
+
+            # ---- Detection metrics: proposed ----
+            prop_metrics = self._compute_detection_metrics(prop_eval_trust, interval_tau)
 
             # ---- Bayesian trust baseline ----
-            bay_trust = {
-                a.agent_id: self._bayesian_update(a, bay_alpha_dict, bay_beta_dict)
-                for a in self.agents
-            }
-            bay_acc = self._compute_accuracy(bay_trust, tau_min)
+            bay_trust = {}
+            for a in self.agents:
+                feats_latest = feature_history[a.agent_id][-1]
+                bay_trust[a.agent_id] = self._bayesian_update(
+                    a,
+                    feats_latest,
+                    bay_alpha_dict,
+                    bay_beta_dict,
+                )
+            bay_metrics = self._compute_detection_metrics(bay_trust, interval_tau)
 
             # ---- Static trust: no detection capability ----
             static_trust = {a.agent_id: 1.0 for a in self.agents}
-            # Static trust cannot detect adversarial agents at all
-            static_acc = self._static_accuracy()
+            static_metrics = self._compute_detection_metrics(static_trust, interval_tau)
 
             # ---- PDR ----
-            pdr_prop = self._simulate_interval_pdr(prop_trust, "proposed")
+            pdr_prop = self._simulate_interval_pdr(prop_eval_trust, "proposed")
             pdr_bay = self._simulate_interval_pdr(bay_trust, "bayesian")
             pdr_static = self._simulate_interval_pdr(static_trust, "static")
 
@@ -510,16 +650,42 @@ class IoUTEnvironment:
                 a.battery = self._batt_proposed[a.agent_id]
 
             # ---- Record ----
+            trust_vals = np.array(list(prop_trust.values()), dtype=np.float32)
             results["interval"].append(interval)
-            results["accuracy_proposed"].append(round(prop_acc * 100, 2))
-            results["accuracy_bayesian"].append(round(bay_acc * 100, 2))
-            results["accuracy_static"].append(round(static_acc * 100, 2))
+            results["accuracy_proposed"].append(round(prop_metrics["accuracy"] * 100, 2))
+            results["accuracy_bayesian"].append(round(bay_metrics["accuracy"] * 100, 2))
+            results["accuracy_static"].append(round(static_metrics["accuracy"] * 100, 2))
+            results["precision_proposed"].append(round(prop_metrics["precision"] * 100, 2))
+            results["precision_bayesian"].append(round(bay_metrics["precision"] * 100, 2))
+            results["precision_static"].append(round(static_metrics["precision"] * 100, 2))
+            results["recall_proposed"].append(round(prop_metrics["recall"] * 100, 2))
+            results["recall_bayesian"].append(round(bay_metrics["recall"] * 100, 2))
+            results["recall_static"].append(round(static_metrics["recall"] * 100, 2))
+            results["f1_proposed"].append(round(prop_metrics["f1"] * 100, 2))
+            results["f1_bayesian"].append(round(bay_metrics["f1"] * 100, 2))
+            results["f1_static"].append(round(static_metrics["f1"] * 100, 2))
+            results["tp_proposed"].append(int(prop_metrics["tp"]))
+            results["tp_bayesian"].append(int(bay_metrics["tp"]))
+            results["tp_static"].append(int(static_metrics["tp"]))
+            results["tn_proposed"].append(int(prop_metrics["tn"]))
+            results["tn_bayesian"].append(int(bay_metrics["tn"]))
+            results["tn_static"].append(int(static_metrics["tn"]))
+            results["fp_proposed"].append(int(prop_metrics["fp"]))
+            results["fp_bayesian"].append(int(bay_metrics["fp"]))
+            results["fp_static"].append(int(static_metrics["fp"]))
+            results["fn_proposed"].append(int(prop_metrics["fn"]))
+            results["fn_bayesian"].append(int(bay_metrics["fn"]))
+            results["fn_static"].append(int(static_metrics["fn"]))
             results["pdr_proposed"].append(round(pdr_prop * 100, 2))
             results["pdr_bayesian"].append(round(pdr_bay * 100, 2))
             results["pdr_static"].append(round(pdr_static * 100, 2))
             results["energy_proposed"].append(round(energy_prop, 2))
             results["energy_bayesian"].append(round(energy_bay, 2))
             results["energy_static"].append(round(energy_static, 2))
+            results["trust_mean_proposed"].append(round(float(trust_vals.mean()), 4))
+            results["trust_std_proposed"].append(round(float(trust_vals.std()), 4))
+            results["trust_min_proposed"].append(round(float(trust_vals.min()), 4))
+            results["trust_max_proposed"].append(round(float(trust_vals.max()), 4))
 
         return results
 

@@ -80,7 +80,21 @@ python simulation/scripts/run_simulation.py \
     --output simulation/outputs/results.csv
 ```
 
-Expected output: `simulation/outputs/results.csv` with 20 rows × 19 metric columns.
+Expected output: `simulation/outputs/results.csv` with 20 rows and aggregated
+mean/std columns for accuracy, precision, recall, F1, confusion matrix counts,
+PDR, energy, and trust-distribution diagnostics.
+
+---
+
+## Step 3b: Sensitivity Studies
+
+```bash
+python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
+```
+
+Expected outputs:
+- `analysis/stats/threshold_sensitivity.csv`
+- `analysis/stats/sequence_length_ablation.csv`
 
 ---
 
