@@ -3,8 +3,8 @@ Full Reproducibility Pipeline
 ==============================
 Runs the complete experiment pipeline in one command:
   1. Generate synthetic behavioral data
-  2. Run multi-run simulation
-  3. Train the transformer trust model
+    2. Train the transformer trust model
+    3. Run multi-run simulation
   4. Run inference on sample sequences
   5. Generate all figures and statistical summary
 
@@ -35,6 +35,8 @@ def main():
     parser.add_argument("--intervals",type=int, default=20)
     parser.add_argument("--skip-training", action="store_true",
                         help="Skip model training (useful if checkpoint exists)")
+    parser.add_argument("--simulation-use-transformer", action="store_true",
+                        help="Use transformer trust scores inside simulation loop.")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -53,22 +55,9 @@ def main():
     ]
     gen_main()
 
-    # ── Step 2: Run simulation ────────────────────────────────────────────
-    step("2/5 — Run multi-agent IoUT simulation")
-    from simulation.scripts.run_simulation import main as sim_main
-    _sys.argv = [
-        "run_simulation.py",
-        "--config", "simulation/configs/simulation_params.json",
-        "--runs",   str(args.runs),
-        "--seed",   str(args.seed),
-        "--intervals", str(args.intervals),
-        "--output", "simulation/outputs/results.csv",
-    ]
-    sim_main()
-
-    # ── Step 3: Train model ───────────────────────────────────────────────
+    # ── Step 2: Train model ───────────────────────────────────────────────
     if not args.skip_training:
-        step("3/5 — Train transformer trust model")
+        step("2/5 — Train transformer trust model")
         from model.inference.train import main as train_main
         _sys.argv = [
             "train.py",
@@ -79,7 +68,26 @@ def main():
         ]
         train_main()
     else:
-        step("3/5 — Skipping model training (--skip-training flag set)")
+        step("2/5 — Skipping model training (--skip-training flag set)")
+
+    # ── Step 3: Run simulation ────────────────────────────────────────────
+    step("3/5 — Run multi-agent IoUT simulation")
+    from simulation.scripts.run_simulation import main as sim_main
+    _sys.argv = [
+        "run_simulation.py",
+        "--config", "simulation/configs/simulation_params.json",
+        "--runs",   str(args.runs),
+        "--seed",   str(args.seed),
+        "--intervals", str(args.intervals),
+        "--output", "simulation/outputs/results.csv",
+    ]
+    if args.simulation_use_transformer:
+        _sys.argv += [
+            "--use-transformer",
+            "--checkpoint", "model/checkpoints/best_model.pt",
+            "--model-config", "model/configs/transformer_config.json",
+        ]
+    sim_main()
 
     # ── Step 4: Run inference ─────────────────────────────────────────────
     step("4/5 — Run trust inference on sample sequences")
@@ -106,7 +114,10 @@ def main():
     plot_pdr(lp("simulation/outputs/results.csv"), "analysis/plots/pdr_comparison.png")
 
     from analysis.plot_ablation import plot_ablation
-    plot_ablation("analysis/plots/ablation_study.png")
+    plot_ablation(
+        "simulation/outputs/results.csv",
+        "analysis/plots/ablation_study.png",
+    )
 
     from analysis.statistical_summary import main as stats_main
     _sys.argv = [

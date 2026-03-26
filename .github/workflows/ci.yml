@@ -81,9 +81,6 @@ jobs:
       - name: Verify v3 stratified sample contains adversarial agents
         run: |
           python -c "
-      - name: Verify v3 stratified sample contains adversarial agents
-        run: |
-          python -c "
           import json, sys
 
           with open('data/sample/sample_sequences.json') as f:

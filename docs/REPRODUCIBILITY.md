@@ -2,6 +2,11 @@
 
 This document provides step-by-step instructions to fully reproduce all results reported in the paper.
 
+> **Scope note:** This repository is a Python artifact reimplementation. The
+> paper prototype references NS-3 Aqua-Sim + Hyperledger Fabric; those original
+> scripts are not bundled here. Treat this guide as reproducibility for the
+> packaged Python artifact outputs.
+
 ---
 
 ## Environment Requirements
@@ -165,21 +170,21 @@ After 30 runs with seed 42:
 
 | Metric | Expected Value | Notes |
 |---|---|---|
-| Accuracy — Proposed (simulation) | ~94–97% | Heuristic trust scoring |
-| Accuracy — Bayesian (simulation) | ~86–100% | Bayesian baseline |
+| Accuracy — Proposed (simulation) | run-dependent | Use `results.csv` from your run |
+| Accuracy — Bayesian (simulation) | run-dependent | Stateful Bayesian update |
 | Accuracy — Static (simulation) | ~86% | 86% = legitimate fraction |
-| Model Test Accuracy (transformer) | 82–90% | v3 harder data; 100% = overfit |
-| PDR — Proposed | ~88–95% | Run-to-run variation |
-| Energy Overhead (proposed vs static) | ~5–8% | Paper: 5.8% |
-| Energy Residual at interval 20 | ~47–53% | Paper Figure 5 range |
+| Model Test Accuracy (transformer) | run-dependent | Dataset and seed sensitive |
+| PDR — Proposed | run-dependent | Run-to-run variation |
+| Energy Overhead (proposed vs static) | run-dependent | Derived from simulation model |
+| Energy Residual at interval 20 | run-dependent | See simulation output |
 | Trust Score Std (mixed sample) | >0.15 | <0.05 indicates constant output |
 
 > **v3 note:** The transformer model intentionally does NOT achieve 100% accuracy
 > on the training dataset. The `low_and_slow` mimicry attack creates irreducible
 > Bayes error (~5-10%), ensuring the model generalizes rather than memorizes.
 >
-> Paper-reported simulation values (94.2% accuracy, 91.6% PDR) are achieved by
-> the heuristic simulation trust scoring, not the transformer model alone.
+> Transformer-backed simulation path is available via
+> `simulation/scripts/run_simulation.py --use-transformer`.
 
 ---
 

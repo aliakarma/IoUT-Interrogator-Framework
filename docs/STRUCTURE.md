@@ -90,12 +90,12 @@ IoUT-Interrogator-Framework/
 The paper's prototype uses NS-3 Aqua-Sim and Hyperledger Fabric for simulation and
 blockchain governance, respectively. These systems require complex installation
 and are not easily reproducible in standard Python environments. This repository
-provides **functionally equivalent Python implementations** that:
+provides a **Python reimplementation artifact** that:
 
 1. Preserve the core acoustic channel physics (Thorp model, energy equations)
 2. Implement the same behavioral metadata generation logic
 3. Simulate PBFT consensus with the same fault-tolerance parameters
-4. Produce results consistent with the paper's reported values
+4. Produces traceable, reproducible outputs for this Python pipeline
 
 ### Data Flow
 

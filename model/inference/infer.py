@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import sys
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -57,7 +58,7 @@ def _load_json_sequences(path: str) -> list:
         return json.load(f)
 
 
-def _stratified_calibration_set(sequences: list, min_per_class: int = 20) -> tuple[list, dict]:
+def _stratified_calibration_set(sequences: list, min_per_class: int = 20) -> Tuple[list, dict]:
     legit = [item for item in sequences if item.get("label", -1) == 0]
     adv = [item for item in sequences if item.get("label", -1) == 1]
 
@@ -120,7 +121,7 @@ def _compute_stratified_calibration_stats(model, sequences: list, seq_len: int, 
     }
 
 
-def _choose_calibration_sequences(primary_sequences: list, fallback_path: str) -> tuple[list, str]:
+def _choose_calibration_sequences(primary_sequences: list, fallback_path: str) -> Tuple[list, str]:
     has_labels = all("label" in item for item in primary_sequences)
     legit = sum(1 for item in primary_sequences if item.get("label", -1) == 0)
     adv = sum(1 for item in primary_sequences if item.get("label", -1) == 1)
