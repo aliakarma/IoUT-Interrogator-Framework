@@ -35,4 +35,4 @@ ENV PYTHONPATH=/workspace
 ENV PYTHONUNBUFFERED=1
 
 # Default command: run the full reproducibility pipeline
-CMD ["python", "scripts/run_full_pipeline.py", "--seed", "42", "--runs", "5"]
+CMD ["python", "scripts/run_full_pipeline.py", "--seed", "42", "--runs", "30"]

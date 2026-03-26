@@ -21,9 +21,10 @@ ROOT CAUSES FIXED vs v1:
            Inference test: 10/10 flagged=0, true_adv=0, misleading accuracy=100%.
            FIX: Stratified sample — always saves 7 legitimate + 3 adversarial.
   RC-D4  No temporal correlation:
-           v1 drew each time step independently from same distribution.
-           FIX: Add AR(1) autocorrelation — each step partially inherits the previous,
-                creating the realistic persistence seen in real acoustic behavioral data.
+         v1 drew each time step independently from same distribution.
+         FIX: Add exponential-smoothing temporal correlation — each step
+             partially inherits the previous state while reverting toward
+             a behavioral mean, creating realistic persistence.
 
 Usage:
     python simulation/scripts/generate_behavioral_data.py \
@@ -61,8 +62,8 @@ ATTACK_TYPES = [
 # measurement uncertainty in the interrogator's metadata collection.
 NOISE_SIGMA = 0.08
 
-# AR(1) autocorrelation coefficient: φ = 0.4
-# Each time step partially inherits the previous step's deviation.
+# Exponential-smoothing persistence coefficient: φ = 0.4
+# Each time step partially inherits the previous step's state.
 AR_PHI = 0.4
 
 
@@ -77,11 +78,11 @@ def _ar1_sequence(mean_vec: np.ndarray, K: int,
                   phi: float = AR_PHI,
                   noise_sigma: float = NOISE_SIGMA) -> np.ndarray:
     """
-    Generate a K-step AR(1) sequence around a mean feature vector.
+    Generate a K-step temporally correlated sequence around a mean feature vector.
 
     Each step: x_t = phi * x_{t-1} + (1-phi) * mean + eps_t
-    This creates realistic temporal persistence matching behavioral drift
-    observed in real acoustic underwater deployments.
+    This is an exponential-smoothing state process (mean-reverting with noise),
+    not strict AR(1) around zero.
     """
     seq = np.zeros((K, len(mean_vec)), dtype=np.float32)
     x_prev = mean_vec.copy()
@@ -106,7 +107,7 @@ _LEGIT_MEAN = np.array([0.22, 0.12, 0.78, 0.13, 0.85], dtype=np.float32)
 
 def generate_legitimate_sequence(K: int, rng: np.random.Generator) -> np.ndarray:
     """
-    AR(1) sequence centered on legitimate behavioral means with noise.
+    Temporally correlated sequence centered on legitimate behavioral means.
     Legitimate agents: low timing variance, low retransmission, high routing
     stability, low neighbor churn, high protocol compliance.
     """
@@ -140,7 +141,7 @@ _ADV_MEANS = {
 def generate_adversarial_sequence(K: int, attack_type: str,
                                    rng: np.random.Generator) -> np.ndarray:
     """
-    AR(1) sequence centered on adversarial behavioral means with noise.
+    Temporally correlated sequence centered on adversarial behavioral means.
     The tightened means create realistic class overlap vs legitimate agents.
     'low_and_slow' attack deliberately mimics legitimate patterns with subtle
     deviations — creating irreducible Bayes error in the classification task.
@@ -169,7 +170,7 @@ def generate_dataset(
     Generate a full dataset of behavioral sequences with labels.
 
     Changes vs v1:
-      - AR(1) temporal autocorrelation on all sequences.
+            - Exponential-smoothing temporal correlation on all sequences.
       - Tightened class means for realistic overlap.
       - Gaussian noise on every feature step.
       - 'low_and_slow' mimicry attack type added.

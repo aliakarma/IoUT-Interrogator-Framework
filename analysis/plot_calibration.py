@@ -178,15 +178,24 @@ def plot_reliability_curve(df: pd.DataFrame, outdir: str, tau_min: float):
 
     x_conf = []
     y_acc = []
+    empty_bins = 0
     for b in range(10):
         mask = bin_ids == b
         if np.any(mask):
             x_conf.append(float(np.mean(confidence[mask])))
             y_acc.append(float(np.mean(correctness[mask])))
+        else:
+            empty_bins += 1
 
     if not x_conf:
         print("Skipping reliability curve: no populated confidence bins.")
         return
+
+    if empty_bins > 0:
+        print(
+            f"Warning: {empty_bins}/10 reliability bins are empty; "
+            "plotting populated bins only."
+        )
 
     plt.figure(figsize=(5.5, 5.5))
     plt.plot([0, 1], [0, 1], linestyle="--", linewidth=1.2, label="Perfect calibration")
