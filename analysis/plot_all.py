@@ -18,6 +18,8 @@ def main():
     parser = argparse.ArgumentParser(description="Generate all paper figures")
     parser.add_argument("--input",  default="simulation/outputs/results.csv")
     parser.add_argument("--outdir", default="analysis/plots/")
+    parser.add_argument("--trust-csv", default="data/processed/trust_scores.csv")
+    parser.add_argument("--tau-min", type=float, default=0.65)
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -42,6 +44,24 @@ def main():
     # Ablation figure
     from analysis.plot_ablation import plot_ablation
     plot_ablation(os.path.join(args.outdir, "ablation_study.png"))
+
+    # Calibration diagnostics (optional; requires inference output)
+    if os.path.exists(args.trust_csv):
+        from analysis.plot_calibration import (
+            plot_confidence_distribution,
+            plot_trust_histogram,
+            plot_reliability_curve,
+            save_confidence_summary,
+        )
+        import pandas as pd
+
+        df_t = pd.read_csv(args.trust_csv)
+        plot_trust_histogram(df_t, args.outdir)
+        plot_confidence_distribution(df_t, args.outdir)
+        save_confidence_summary(df_t)
+        plot_reliability_curve(df_t, args.outdir, tau_min=args.tau_min)
+    else:
+        print(f"Skipping calibration plots (not found): {args.trust_csv}")
 
     print("\n=== All figures saved to:", args.outdir, "===")
 
