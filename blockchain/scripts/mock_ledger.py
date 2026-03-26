@@ -77,9 +77,27 @@ class ValidatorNode:
         if self.is_byzantine:
             vote = random.random() > 0.5
             return vote, self.node_id
-        # Honest validation: check required fields are present
-        required = {"agent_id", "trust_score", "interval", "timestamp"}
-        valid = required.issubset(proposal.keys())
+
+        # Honest validation for trust-delta proposals
+        trust_required = {"agent_id", "trust_score", "interval", "timestamp"}
+        if trust_required.issubset(proposal.keys()):
+            return True, self.node_id
+
+        # Honest validation for enforcement proposals
+        enforcement_required = {
+            "agent_id", "tier", "action", "validated_by_pbft", "timestamp"
+        }
+        if enforcement_required.issubset(proposal.keys()):
+            tier = int(proposal["tier"])
+            if tier == 1:
+                valid = True
+            elif tier in (2, 3):
+                valid = bool(proposal["validated_by_pbft"])
+            else:
+                valid = False
+            return valid, self.node_id
+
+        valid = False
         return valid, self.node_id
 
     def commit(self, record: dict):
@@ -191,6 +209,10 @@ class PBFTConsortium:
             # Tier-1: immediate local enforcement, no PBFT needed
             self.enforcement_log.append(proposal)
             return True
+        if event.tier not in (2, 3):
+            return False
+        if not event.validated_by_pbft:
+            return False
         if self._pbft_consensus(proposal):
             self.enforcement_log.append(proposal)
             return True
