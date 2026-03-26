@@ -16,8 +16,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-PAPER_RESULTS = {"proposed": 91.6, "bayesian": 86.7, "static": 79.4}
-
 
 def load_or_generate_data(input_path: str) -> pd.DataFrame:
     if not os.path.exists(input_path):

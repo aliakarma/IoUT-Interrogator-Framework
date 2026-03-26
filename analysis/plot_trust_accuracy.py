@@ -19,14 +19,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-# Paper-reported summary values (for reference annotation)
-PAPER_RESULTS = {
-    "proposed": 94.2,
-    "bayesian": 86.1,
-    "static":   72.5,
-}
-
-
 def load_or_generate_data(input_path: str) -> pd.DataFrame:
     """Load simulation results CSV; fail fast if it is missing."""
     if not os.path.exists(input_path):
@@ -67,15 +59,6 @@ def plot_trust_accuracy(df: pd.DataFrame, output_path: str):
                     df["accuracy_static_mean"] - df["accuracy_static_std"],
                     df["accuracy_static_mean"] + df["accuracy_static_std"],
                     alpha=0.12, color="#1f77b4")
-
-    # Annotations for paper-reported values
-    ax.annotate(
-        f"Mean: {PAPER_RESULTS['proposed']:.1f}%",
-        xy=(intervals[-1], df["accuracy_proposed_mean"].iloc[-1]),
-        xytext=(-60, 6), textcoords="offset points",
-        fontsize=9, color="#2ca02c",
-        arrowprops=dict(arrowstyle="-", color="#2ca02c", lw=0.8),
-    )
 
     ax.set_xlabel("Monitoring Intervals", fontsize=12)
     ax.set_ylabel("Anomaly Detection Accuracy (%)", fontsize=12)
