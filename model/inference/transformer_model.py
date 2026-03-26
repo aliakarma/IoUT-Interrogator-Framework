@@ -45,6 +45,7 @@ import json
 import math
 import os
 import random
+import copy
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -214,8 +215,23 @@ def stratified_split(
     """
     rng = random.Random(seed)
 
-    legit = [s for s in sequences if s["label"] == 0]
-    adv   = [s for s in sequences if s["label"] == 1]
+    # Clone samples to avoid aliasing side-effects when upstream data uses
+    # repeated object references (e.g., list multiplication in tests).
+    cloned = [copy.deepcopy(s) for s in sequences]
+
+    # Ensure sample identifiers are unique if duplicates are present.
+    # This keeps split membership checks disjoint and deterministic.
+    seen_agent_ids: Dict[str, int] = {}
+    for idx, sample in enumerate(cloned):
+        if "agent_id" in sample:
+            raw_id = str(sample["agent_id"])
+            count = seen_agent_ids.get(raw_id, 0)
+            if count > 0:
+                sample["agent_id"] = f"{raw_id}__dup{count}__idx{idx}"
+            seen_agent_ids[raw_id] = count + 1
+
+    legit = [s for s in cloned if s["label"] == 0]
+    adv   = [s for s in cloned if s["label"] == 1]
 
     rng.shuffle(legit)
     rng.shuffle(adv)
