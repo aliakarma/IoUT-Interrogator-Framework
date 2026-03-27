@@ -67,46 +67,45 @@ graph LR
 
 ### 🎯 Core Innovation
 
-> The framework introduces a **continuous behavioral trust inference mechanism** based on temporal sequence modeling, enabling detection of adversarial or faulty agents using **communication-level metadata** without accessing payload data.
+> The framework introduces a **continuous behavioral trust inference mechanism** based on temporal sequence modeling, enabling the detection of adversarial or faulty agents using **communication-level metadata** without accessing payload data.
 
 ### 🛠️ Designed For
 
 | Purpose | Description |
 |---------|-------------|
 | 🔬 **Controlled Experimentation** | Isolate variables for rigorous behavioral analysis |
-| ♻️ **Reproducible Evaluation** | Fixed seeds, documented parameters, containerized execution |
+| ♻️ **Reproducible Evaluation** | Fixed seeds, documented parameters, and containerized execution |
 | 📊 **Trust Mechanism Analysis** | Study inference under stochastic behavioral conditions |
-| 🧪 **Adversarial Testing** | Evaluate robustness against simulated attacks |
+| 🧪 **Adversarial Testing** | Evaluate robustness against simulated attack scenarios |
 
 ---
 
 ## ⚠️ Scope and Research Positioning
 
-> ⚡ **Important**: This is a **behavioral-level simulation framework**, not a full network or acoustic simulation system.
+> ⚡ **Important**: This framework operates at the **behavioral abstraction layer** and is not intended to simulate full network stacks or physical-layer acoustic effects.
 
 <details>
-<summary><strong>📌 Click to view scope clarifications</strong></summary>
+<summary><strong>📌 Click to expand scope details</strong></summary>
 
 ### ✅ What This Framework Includes
 
-- 📡 **Communication-metadata abstraction level** simulation
-- 🤖 **Transformer-based temporal modeling** for trust inference
-- 🔄 **Dynamic trust updating** with exponential smoothing
-- 🚫 **Threshold-based gating** for anomaly mitigation
-- 📈 **Statistical evaluation pipeline** with 30 independent runs
+- 📡 Communication-metadata-level simulation abstraction  
+- 🤖 Transformer-based temporal modeling for trust inference  
+- 🔄 Dynamic trust updating with exponential smoothing  
+- 🚫 Threshold-based gating for anomaly mitigation  
+- 📈 Statistical evaluation pipeline with 30 independent runs  
 
 ### ❌ What This Framework Does NOT Include
 
-- 🌊 Physical-layer acoustic effects (propagation delay, multipath, Doppler)
-- 🛰️ Full underwater network deployment simulation
-- 🔗 Production-ready blockchain integration (conceptual module only)
-- 📦 Real-world hardware deployment scripts
+- 🌊 Physical-layer acoustic effects (e.g., propagation delay, multipath, Doppler)  
+- 🛰️ Full underwater network protocol or deployment simulation  
+- 🔗 Production-ready blockchain integration (conceptual module only)  
+- 📦 Real-world hardware deployment or embedded system support  
 
-### 📚 For Full Details
+### 📚 Documentation
 
-See comprehensive documentation:
-- [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md) - Reproduction guidelines
-- [`docs/STRUCTURE.md`](docs/STRUCTURE.md) - Architecture deep-dive
+- `docs/REPRODUCIBILITY.md` — Reproduction guidelines  
+- `docs/STRUCTURE.md` — Architecture and module breakdown  
 
 </details>
 
@@ -115,22 +114,22 @@ See comprehensive documentation:
 ## ✨ Key Features
 
 <p align="center">
-  <img src="https://img.shields.io/badge/🤖-Transformer--Based-9C27B0?style=flat-square" alt="Transformer">
-  <img src="https://img.shields.io/badge/📡-Metadata--Driven-2196F3?style=flat-square" alt="Metadata">
-  <img src="https://img.shields.io/badge/🔁-Dynamic--Updating-FF9800?style=flat-square" alt="Dynamic">
-  <img src="https://img.shields.io/badge/🚫-Anomaly--Mitigation-F44336?style=flat-square" alt="Mitigation">
-  <img src="https://img.shields.io/badge/📊-Reproducible--Pipeline-4CAF50?style=flat-square" alt="Pipeline">
-  <img src="https://img.shields.io/badge/🧪-Controlled--Simulation-607D8B?style=flat-square" alt="Simulation">
+  <img src="https://img.shields.io/badge/Transformer-Based-9C27B0?style=flat-square">
+  <img src="https://img.shields.io/badge/Metadata-Driven-2196F3?style=flat-square">
+  <img src="https://img.shields.io/badge/Dynamic-Updating-FF9800?style=flat-square">
+  <img src="https://img.shields.io/badge/Anomaly-Mitigation-F44336?style=flat-square">
+  <img src="https://img.shields.io/badge/Reproducible-Pipeline-4CAF50?style=flat-square">
+  <img src="https://img.shields.io/badge/Controlled-Simulation-607D8B?style=flat-square">
 </p>
 
 | Feature | Description | Benefit |
-|---------|-------------|---------|
-| 🤖 **Transformer-Based Trust Inference** | Temporal modeling of agent behavior using sequence-based learning | Captures long-range behavioral dependencies |
-| 📡 **Metadata-Driven Monitoring** | Trust estimation based solely on communication-level features | Privacy-preserving, payload-agnostic analysis |
-| 🔁 **Dynamic Trust Updating** | Continuous trust scoring with exponential smoothing | Adapts to evolving agent behavior in real-time |
-| 🚫 **Trust-Based Agent Regulation** | Threshold-based gating mechanism for anomaly mitigation | Proactive defense against adversarial agents |
-| 📊 **Reproducible Evaluation Pipeline** | End-to-end pipeline for simulation, training, and analysis | Ensures scientific rigor and result validation |
-| 🧪 **Controlled Behavioral Simulation** | Synthetic AR(1)-based behavioral modeling with adversarial scenarios | Enables systematic testing under known conditions |
+|--------|-------------|---------|
+| 🤖 **Transformer-Based Trust Inference** | Temporal modeling of agent behavior using sequence learning | Captures long-range behavioral dependencies |
+| 📡 **Metadata-Driven Monitoring** | Trust estimation using communication-level features only | Privacy-preserving and payload-agnostic |
+| 🔁 **Dynamic Trust Updating** | Continuous scoring with exponential smoothing | Adapts to evolving agent behavior in real time |
+| 🚫 **Trust-Based Agent Regulation** | Threshold-based gating for anomaly mitigation | Enables proactive defense against adversarial agents |
+| 📊 **Reproducible Evaluation Pipeline** | End-to-end simulation, training, and analysis workflow | Ensures scientific rigor and repeatability |
+| 🧪 **Controlled Behavioral Simulation** | Synthetic AR(1)-based behavioral modeling | Enables systematic testing under controlled conditions |
 
 ---
 
@@ -138,24 +137,22 @@ See comprehensive documentation:
 
 ### 🧪 Experimental Configuration
 
-```yaml
-evaluation_setup:
-  independent_runs: 30
-  monitoring_intervals: 20
-  total_agents: 50
-  adversarial_fraction: 0.15
-  random_seed: 42
-```
+    evaluation_setup:
+      independent_runs: 30
+      monitoring_intervals: 20
+      total_agents: 50
+      adversarial_fraction: 0.15
+      random_seed: 42
 
 ### 📊 Results Summary
 
 | Metric | Static Trust | Bayesian Trust | **Proposed (Ours)** |
 |--------|-------------|----------------|---------------------|
-| 🔍 Detection Accuracy (%) | 86.00 ± 0.00 | 78.71 ± 8.19 | **✨ 91.87 ± 4.96** |
-| 🎯 Precision (%) | 0.00 ± 0.00 | 44.99 ± 15.62 | **✨ 72.39 ± 18.34** |
-| 📥 Recall (%) | 0.00 ± 0.00 | 58.52 ± 20.26 | **✨ 76.69 ± 12.50** |
-| ⚖️ F1 Score (%) | 0.00 ± 0.00 | 46.61 ± 13.15 | **✨ 70.32 ± 13.14** |
-| 📦 Packet Delivery Ratio (%) | 91.59 ± 3.85 | 92.31 ± 3.71 | **✨ 92.39 ± 3.75** |
+| 🔍 Detection Accuracy (%) | 86.00 ± 0.00 | 78.71 ± 8.19 | **91.87 ± 4.96** |
+| 🎯 Precision (%) | 0.00 ± 0.00 | 44.99 ± 15.62 | **72.39 ± 18.34** |
+| 📥 Recall (%) | 0.00 ± 0.00 | 58.52 ± 20.26 | **76.69 ± 12.50** |
+| ⚖️ F1 Score (%) | 0.00 ± 0.00 | 46.61 ± 13.15 | **70.32 ± 13.14** |
+| 📦 Packet Delivery Ratio (%) | 91.59 ± 3.85 | 92.31 ± 3.71 | **92.39 ± 3.75** |
 | 🔋 Residual Energy (%) | **75.33 ± 0.05** | 73.95 ± 0.06 | 73.87 ± 0.05 |
 
 <details>
@@ -163,17 +160,17 @@ evaluation_setup:
 
 ### 🎯 Key Findings
 
-1. **🚫 Static trust fails completely** in adversarial detection (F1 = 0.00)
-2. **📈 Temporal modeling significantly improves** detection performance across all metrics
-3. **📡 Communication reliability (PDR)** remains statistically comparable across methods
-4. **🔋 Energy overhead is modest** relative to baseline approaches (~1.5% difference)
-5. **✨ Proposed method achieves best trade-off** between detection accuracy and system efficiency
+1. **Static trust fails in adversarial detection** (F1 = 0.00)  
+2. **Temporal modeling significantly improves performance** across all detection metrics  
+3. **Communication reliability (PDR)** remains comparable across methods  
+4. **Energy overhead remains modest** relative to baseline approaches (~1.5%)  
+5. **Proposed method achieves the best trade-off** between detection accuracy and system efficiency  
 
 ### 📁 Source Files
 
-- Raw results: `simulation/outputs/results.csv`
-- Aggregated stats: `analysis/stats/summary_table.csv`
-- Visualization scripts: `analysis/plot_*.py`
+- `simulation/outputs/results.csv` — Raw experimental outputs  
+- `analysis/stats/summary_table.csv` — Aggregated statistics  
+- `analysis/plot_*.py` — Visualization scripts  
 
 </details>
 
@@ -182,83 +179,66 @@ evaluation_setup:
 ## 🚀 Getting Started in 3 Steps
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Step-1/3-2196F3?style=flat-square" alt="Step 1">
-  <img src="https://img.shields.io/badge/Step-2/3-4CAF50?style=flat-square" alt="Step 2">
-  <img src="https://img.shields.io/badge/Step-3/3-FF9800?style=flat-square" alt="Step 3">
+  <img src="https://img.shields.io/badge/Step-1/3-2196F3?style=flat-square">
+  <img src="https://img.shields.io/badge/Step-2/3-4CAF50?style=flat-square">
+  <img src="https://img.shields.io/badge/Step-3/3-FF9800?style=flat-square">
 </p>
 
-### Step 1️⃣: Clone & Install
+### Step 1: Clone & Install
 
-```bash
-# 📥 Clone the repository
-git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
-cd IoUT-Interrogator-Framework
+    git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
+    cd IoUT-Interrogator-Framework
 
-# 📦 Install dependencies
-pip install -r requirements.txt
+    pip install -r requirements.txt
 
-# ✅ Verify installation
-python -c "import torch; print(f'PyTorch {torch.__version__} ready!')"
-```
+    python -c "import torch; print('PyTorch ready')"
 
-### Step 2️⃣: Quick Demo (⏱️ ~5 minutes)
+---
 
-```bash
-# 🎬 Run a minimal simulation with sample data
-python scripts/run_full_pipeline.py --quick
+### Step 2: Quick Demo (~5 minutes)
 
-# 📊 Expected outputs:
-# ✅ Sample trust inference results
-# ✅ Basic evaluation plots in analysis/plots/
-# ✅ Environment setup verification
-```
+    python scripts/run_full_pipeline.py --quick
+
+Expected outputs:
+- Sample trust inference results  
+- Evaluation plots in `analysis/plots/`  
+- Environment validation  
 
 <details>
-<summary><strong>💡 Pro Tip: Use Docker for guaranteed reproducibility</strong></summary>
+<summary><strong>💡 Pro Tip: Use Docker for reproducibility</strong></summary>
 
-```bash
-# 🐳 Build and run with Docker
-docker build -t iout-interrogator:latest .
-docker run --gpus all -v $(pwd)/results:/app/results iout-interrogator:latest
+    docker build -t iout-interrogator:latest .
+    docker run --gpus all -v $(pwd)/results:/app/results iout-interrogator:latest
 
-# 🎯 Run quick demo inside container
-python scripts/run_full_pipeline.py --quick
-```
+    python scripts/run_full_pipeline.py --quick
 
 </details>
 
-### Step 3️⃣: Full Reproducible Evaluation
+---
 
-```bash
-# 🔬 Reproduce all main results (30 runs, ~2-4 hours)
-python scripts/reproduce_all.py --seed 42 --runs 30
+### Step 3: Full Reproducible Evaluation
 
-# 📈 Generate sensitivity analysis
-python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
+    python scripts/reproduce_all.py --seed 42 --runs 30
 
-# 📊 View aggregated results
-cat analysis/stats/summary_table.csv
-```
+    python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
+
+    cat analysis/stats/summary_table.csv
 
 <details>
 <summary><strong>⚙️ Advanced Configuration Options</strong></summary>
 
-```bash
-# Customize simulation parameters
-python scripts/reproduce_all.py \
-  --seed 42 \
-  --runs 30 \
-  --agents 50 \
-  --intervals 20 \
-  --adversarial-fraction 0.15 \
-  --output-dir ./custom_results
+    python scripts/reproduce_all.py \
+      --seed 42 \
+      --runs 30 \
+      --agents 50 \
+      --intervals 20 \
+      --adversarial-fraction 0.15 \
+      --output-dir ./custom_results
 
-# Run ablation studies
-python analysis/sensitivity_study.py \
-  --study-type ablation \
-  --components transformer,smoothing,threshold \
-  --seed 42
-```
+    python analysis/sensitivity_study.py \
+      --study-type ablation \
+      --components transformer,smoothing,threshold \
+      --seed 42
 
 </details>
 
