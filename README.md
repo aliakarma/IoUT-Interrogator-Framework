@@ -28,7 +28,7 @@
 
 ---
 
-## 🔬 Overview {#overview}
+## 🔬 Overview
 
 This repository provides a **research-grade, reproducible implementation** of an interrogator-based behavioral trust framework for autonomous Internet of Underwater Things (IoUT) environments.
 
@@ -42,7 +42,7 @@ The implementation is designed for:
 
 ---
 
-## ⚠️ Scope and Research Positioning {#scope-and-research-positioning}
+## ⚠️ Scope and Research Positioning
 
 This repository corresponds to a **behavioral-level simulation framework**, not a full network or acoustic simulation system.
 
@@ -59,7 +59,7 @@ For full details, see:
 
 ---
 
-## ✨ Key Features {#key-features}
+## ✨ Key Features
 
 * 🤖 **Transformer-Based Trust Inference**
   Temporal modeling of agent behavior using sequence-based learning.
@@ -81,7 +81,7 @@ For full details, see:
 
 ---
 
-## 📈 Reproducible Results {#reproducible-results}
+## 📈 Reproducible Results
 
 Evaluation is conducted over:
 
@@ -113,7 +113,7 @@ Source files:
 
 ---
 
-## 🚀 Getting Started in 3 Steps {#getting-started-in-3-steps}
+## 🚀 Getting Started in 3 Steps
 
 ### Step 1: Clone & Install
 
@@ -147,7 +147,7 @@ python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
 
 ---
 
-## 📚 Interactive Notebooks {#interactive-notebooks}
+## 📚 Interactive Notebooks
 
 All notebooks are fully compatible with Google Colab for cloud-based execution:
 
@@ -160,7 +160,7 @@ All notebooks are fully compatible with Google Colab for cloud-based execution:
 
 ---
 
-## 🗂️ Repository Structure {#repository-structure}
+## 🗂️ Repository Structure
 
 ```text
 IoUT-Interrogator-Framework/
@@ -261,7 +261,7 @@ IoUT-Interrogator-Framework/
 
 ---
 
-## 🖥️ Environment Setup {#environment-setup}
+## 🖥️ Environment Setup
 
 ### System Requirements
 
@@ -298,7 +298,7 @@ docker run --gpus all -v $(pwd)/results:/app/results iout-interrogator:latest
 
 ---
 
-## 📋 Supplementary Materials {#supplementary-materials}
+## 📋 Supplementary Materials
 
 Additional resources are available in the `docs/` directory:
 
@@ -310,7 +310,7 @@ Additional resources are available in the `docs/` directory:
 
 ---
 
-## 📚 Artifact Availability {#artifact-availability}
+## 📚 Artifact Availability
 
 This repository is designed for **full reproducibility and transparency**:
 
@@ -330,7 +330,7 @@ This repository is designed for **full reproducibility and transparency**:
 
 ---
 
-## 📖 Citation {#citation}
+## 📖 Citation
 
 ### BibTeX Format
 
@@ -350,13 +350,13 @@ Akarma, A., Syed, T. A., Jilani, A. K., Jan, S., Muneer, H., Khan, M. A., & Yu, 
 
 ---
 
-## 📄 License {#license}
+## 📄 License
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
 
 ---
 
-## 🤝 Reproducibility Commitment {#reproducibility-commitment}
+## 🤝 Reproducibility Commitment
 
 All code, simulation parameters, and evaluation procedures are provided to ensure **full transparency and reproducibility**.
 
