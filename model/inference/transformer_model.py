@@ -364,12 +364,13 @@ def evaluate(
     criterion: nn.Module,
     tau_min: float = 0.65,
     temperature: float = 1.0,
-) -> Tuple[float, float, float, float]:
-    """Evaluate. Returns (loss, accuracy, precision, recall)."""
+) -> Tuple[float, float, float, float, float, float]:
+    """Evaluate. Returns (loss, accuracy, precision, recall, ece, brier)."""
     model.eval()
     total_loss: float = 0.0
     all_preds:  List[float] = []
     all_labels: List[float] = []
+    all_probs:  List[float] = []
     threshold = _adv_threshold(tau_min)
 
     with torch.no_grad():
@@ -383,9 +384,11 @@ def evaluate(
 
             all_preds.extend(preds.cpu().numpy().flatten().tolist())
             all_labels.extend(labels.cpu().numpy().flatten().tolist())
+            all_probs.extend(probs.cpu().numpy().flatten().tolist())
 
     all_preds  = np.array(all_preds,  dtype=np.float32)
     all_labels = np.array(all_labels, dtype=np.float32)
+    all_probs  = np.array(all_probs,  dtype=np.float32)
 
     accuracy  = float((all_preds == all_labels).mean())
     tp = float(((all_preds == 1) & (all_labels == 1)).sum())
@@ -394,7 +397,32 @@ def evaluate(
     precision = tp / (tp + fp + 1e-8)
     recall    = tp / (tp + fn + 1e-8)
 
-    return total_loss / max(len(all_labels), 1), accuracy, precision, recall
+    # Calibration metrics on adversarial probability p_adv.
+    # Brier score: mean squared error between probability and binary label.
+    brier = float(np.mean((all_probs - all_labels) ** 2)) if len(all_labels) else 0.0
+
+    # ECE (Expected Calibration Error), equal-width bins in [0,1].
+    n_bins = 10
+    ece = 0.0
+    if len(all_labels) > 0:
+        bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+        for i in range(n_bins):
+            lo = bin_edges[i]
+            hi = bin_edges[i + 1]
+            if i == n_bins - 1:
+                in_bin = (all_probs >= lo) & (all_probs <= hi)
+            else:
+                in_bin = (all_probs >= lo) & (all_probs < hi)
+
+            if not np.any(in_bin):
+                continue
+
+            prob_mean = float(all_probs[in_bin].mean())
+            label_mean = float(all_labels[in_bin].mean())
+            weight = float(in_bin.mean())
+            ece += weight * abs(prob_mean - label_mean)
+
+    return total_loss / max(len(all_labels), 1), accuracy, precision, recall, float(ece), brier
 
 
 # ---------------------------------------------------------------------------
@@ -665,6 +693,15 @@ def train_model(
     )
 
     best_val_acc   = 0.0
+    best_val_epoch = 0
+    best_val_metrics = {
+        "loss": None,
+        "accuracy": None,
+        "precision": None,
+        "recall": None,
+        "ece": None,
+        "brier": None,
+    }
     patience_count = 0
     patience       = config["training"]["early_stopping_patience"]
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -676,7 +713,7 @@ def train_model(
             label_smoothing=label_smoothing,
             debug=(epoch == 1 and verbose),
         )
-        val_loss, val_acc, val_prec, val_rec = evaluate(
+        val_loss, val_acc, val_prec, val_rec, val_ece, val_brier = evaluate(
             model,
             val_loader,
             criterion,
@@ -691,11 +728,21 @@ def train_model(
                 f"Epoch {epoch:3d} | lr={lr:.1e} | "
                 f"Train Loss={train_loss:.4f} Acc={train_acc:.4f} | "
                 f"Val Loss={val_loss:.4f} Acc={val_acc:.4f} "
-                f"Prec={val_prec:.4f} Rec={val_rec:.4f}"
+                f"Prec={val_prec:.4f} Rec={val_rec:.4f} "
+                f"ECE={val_ece:.4f} Brier={val_brier:.4f}"
             )
 
         if val_acc > best_val_acc:
             best_val_acc   = val_acc
+            best_val_epoch = epoch
+            best_val_metrics = {
+                "loss": float(val_loss),
+                "accuracy": float(val_acc),
+                "precision": float(val_prec),
+                "recall": float(val_rec),
+                "ece": float(val_ece),
+                "brier": float(val_brier),
+            }
             patience_count = 0
             torch.save(model.state_dict(),
                        os.path.join(checkpoint_dir, "best_model.pt"))
@@ -712,7 +759,7 @@ def train_model(
         torch.load(os.path.join(checkpoint_dir, "best_model.pt"),
                    weights_only=True)
     )
-    test_loss, test_acc, test_prec, test_rec = evaluate(
+    test_loss, test_acc, test_prec, test_rec, test_ece, test_brier = evaluate(
         model,
         test_loader,
         criterion,
@@ -730,7 +777,31 @@ def train_model(
         print(f"  Precision : {test_prec:.4f}")
         print(f"  Recall    : {test_rec:.4f}")
         print(f"  F1        : {f1:.4f}")
+        print(f"  ECE       : {test_ece:.4f}")
+        print(f"  Brier     : {test_brier:.4f}")
         print(f"{'='*54}")
+
+    metrics_payload = {
+        "best_validation": {
+            "epoch": int(best_val_epoch),
+            **best_val_metrics,
+        },
+        "test": {
+            "loss": float(test_loss),
+            "accuracy": float(test_acc),
+            "precision": float(test_prec),
+            "recall": float(test_rec),
+            "f1": float(f1),
+            "ece": float(test_ece),
+            "brier": float(test_brier),
+        },
+        "calibration": {
+            "temperature": float(inference_temperature),
+            "ece_bins": 10,
+        },
+    }
+    with open(os.path.join(checkpoint_dir, "evaluation_metrics.json"), "w", encoding="utf-8") as f:
+        json.dump(metrics_payload, f, indent=2)
 
     # Output distribution validation
     if verbose:

@@ -34,6 +34,7 @@ import torch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+from compat import ensure_supported_python
 from model.inference.transformer_model import train_model, set_seeds
 
 
@@ -112,6 +113,7 @@ def _compute_calibration_stats(model, sequences: list, seq_len: int, temperature
 
 
 def main():
+    ensure_supported_python()
     parser = argparse.ArgumentParser(
         description="Train the IoUT behavioral trust transformer"
     )

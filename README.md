@@ -177,15 +177,15 @@ cat analysis/stats/summary_table.csv
 python scripts/reproduce_all.py \
   --seed 42 \
   --runs 30 \
-  --agents 50 \
   --intervals 20 \
-  --adversarial-fraction 0.15 \
-  --output-dir ./custom_results
+  --skip-training
 
-# Component ablation study
+# Threshold + sequence sensitivity study
 python analysis/sensitivity_study.py \
-  --study-type ablation \
-  --components transformer,smoothing,threshold \
+  --runs 20 \
+  --intervals 20 \
+  --tau-values 0.55,0.60,0.65,0.70,0.75 \
+  --sequence-lengths 16,32,64 \
   --seed 42
 ```
 
@@ -342,7 +342,7 @@ IoUT-Interrogator-Framework/
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| **Python** | 3.9+ | 3.10+ |
+| **Python** | 3.9 | 3.10-3.11 |
 | **PyTorch** | 2.0 (CPU) | 2.0+ with CUDA 11.8+ |
 | **RAM** | 4 GB | 8+ GB |
 | **Storage** | 2 GB | 5+ GB (full evaluation) |
@@ -351,21 +351,13 @@ IoUT-Interrogator-Framework/
 ### Python Dependencies
 
 ```bash
-# Core scientific stack
-numpy>=1.21.0
-pandas>=1.3.0
-scikit-learn>=1.0.0
-
-# Deep learning
-torch>=2.0.0
-torchvision>=0.15.0
-
-# Visualization & utilities
-matplotlib>=3.4.0
-tqdm>=4.60.0
-jupyter>=1.0.0
-ipywidgets>=7.7.0
+# Install the tested, pinned dependency set
+pip install -r requirements.txt
 ```
+
+> **Version policy:** this project supports Python **3.9-3.11** only.
+> Entry-point scripts include a runtime guard that fails fast on unsupported
+> interpreters to avoid dependency resolution issues.
 
 > **Tip:** Use a virtual environment for isolation:
 > ```bash
@@ -385,7 +377,7 @@ ipywidgets>=7.7.0
 | Issue | Solution |
 |-------|----------|
 | `CUDA not available` | Verify NVIDIA drivers and CUDA toolkit; use `--device cpu` flag |
-| `MemoryError` | Reduce `--runs` or `--agents`; try `--batch-size 8` |
+| `MemoryError` | Reduce `--runs` or `--intervals`; or run `python scripts/run_full_pipeline.py --quick` |
 | `ModuleNotFoundError` | Run `pip install -r requirements.txt --force-reinstall` |
 | `Docker permission denied` | Run `sudo usermod -aG docker $USER` and re-login |
 
@@ -400,7 +392,7 @@ All code, simulation parameters, and evaluation procedures are provided for full
 ### Reproduction Checklist
 
 ```
-[ ] Python 3.9+ installed             →  python --version
+[ ] Python 3.9-3.11 installed         →  python --version
 [ ] Dependencies installed             →  pip install -r requirements.txt
 [ ] Quick demo runs successfully       →  python scripts/run_full_pipeline.py --quick
 [ ] Full evaluation executed           →  python scripts/reproduce_all.py --seed 42 --runs 30

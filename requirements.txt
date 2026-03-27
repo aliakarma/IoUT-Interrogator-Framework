@@ -1,11 +1,12 @@
 # IoUT Interrogator Framework — Python Dependencies
-# Python 3.9+ required
+# Supported Python versions: 3.9, 3.10, 3.11
 # CPU-only; no GPU needed
 
 # Core scientific computing
 numpy==1.24.4
 pandas==2.0.3
 scipy==1.11.4
+scikit-learn==1.3.2
 
 # Deep learning — CPU build
 torch==2.1.2

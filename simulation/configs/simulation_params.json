@@ -41,11 +41,39 @@
     "smoothing_factor_alpha": 0.8
   },
 
+  "routing": {
+    "_note": "Reroute success model: p_success = base_success - (w_load*load + w_distance*distance_norm + w_noise*noise_norm).",
+    "base_load": 0.55,
+    "isolation_load_reduction": 0.25,
+    "distance_ref_m": 1000.0,
+    "base_success": 0.95,
+    "w_load": 0.35,
+    "w_distance": 0.35,
+    "w_noise": 0.30,
+    "noise_mean": 0.0,
+    "noise_std": 0.10
+  },
+
   "energy": {
-    "_note": "Calibrated drain rates reproduce paper Figure 5 (47-53% residual after 20 intervals, 5.8% overhead).",
-    "drain_rate_static_pct_per_interval": 2.35,
-    "drain_rate_bayesian_pct_per_interval": 2.48,
-    "drain_rate_proposed_pct_per_interval": 2.49,
+    "_note": "Parametric interval energy model: drain_pct = alpha*packet_count + beta*compute_cost + gamma*communication_distance.",
+    "alpha": 1.35,
+    "beta": 0.75,
+    "gamma": 0.00035,
+    "base_packet_count": 1.2,
+    "packet_multiplier_sensor": 1.0,
+    "packet_multiplier_auv": 1.1,
+    "packet_multiplier": {
+      "static": 1.0,
+      "bayesian": 1.01,
+      "proposed": 1.02
+    },
+    "compute_cost": {
+      "static": 0.95,
+      "bayesian": 1.10,
+      "proposed": 1.12
+    },
+    "distance_sample_peers": 3,
+    "packet_count_noise_std": 0.08,
     "drain_noise_std_pct": 0.12,
     "initial_battery_pct": 100.0
   },
@@ -88,5 +116,13 @@
     "bayesian_trust": true,
     "bayesian_prior_alpha": 1.0,
     "bayesian_prior_beta": 1.0
+  },
+
+  "blockchain": {
+    "enabled": true,
+    "num_validators": 9,
+    "num_byzantine": 0,
+    "seed": 42,
+    "network_latency_ms": 500.0
   }
 }
