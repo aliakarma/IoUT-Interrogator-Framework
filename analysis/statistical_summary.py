@@ -1,12 +1,12 @@
 """
 Statistical Summary
 ====================
-Computes mean ± std summary statistics across all simulation runs and
-saves a LaTeX-ready table to analysis/stats/summary_table.csv.
+Computes per-metric summary statistics from raw long-format simulation output,
+including mean and bootstrap confidence intervals.
 
 Usage:
     python analysis/statistical_summary.py \
-        --input simulation/outputs/results.csv \
+    --input simulation/outputs/raw_results.csv \
         --output analysis/stats/summary_table.csv
 """
 
@@ -19,50 +19,103 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-METRICS = [
-    ("Detection Accuracy — Proposed (%)",  "accuracy_proposed"),
-    ("Detection Accuracy — Bayesian (%)",  "accuracy_bayesian"),
-    ("Detection Accuracy — Static (%)",    "accuracy_static"),
-    ("Precision — Proposed (%)",           "precision_proposed"),
-    ("Precision — Bayesian (%)",           "precision_bayesian"),
-    ("Precision — Static (%)",             "precision_static"),
-    ("Recall — Proposed (%)",              "recall_proposed"),
-    ("Recall — Bayesian (%)",              "recall_bayesian"),
-    ("Recall — Static (%)",                "recall_static"),
-    ("F1 Score — Proposed (%)",            "f1_proposed"),
-    ("F1 Score — Bayesian (%)",            "f1_bayesian"),
-    ("F1 Score — Static (%)",              "f1_static"),
-    ("Packet Delivery Ratio — Proposed (%)", "pdr_proposed"),
-    ("Packet Delivery Ratio — Bayesian (%)", "pdr_bayesian"),
-    ("Packet Delivery Ratio — Static (%)",   "pdr_static"),
-    ("Residual Energy — Proposed (%)",     "energy_proposed"),
-    ("Residual Energy — Bayesian (%)",     "energy_bayesian"),
-    ("Residual Energy — Static (%)",       "energy_static"),
-]
+REQUIRED_RAW_COLUMNS = {"run_id", "seed", "interval", "metric_name", "value"}
 
 
-def compute_summary(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute mean, std, min, max across all intervals for each metric."""
+def validate_raw_results_schema(df: pd.DataFrame) -> None:
+    """Validate required raw long-format columns."""
+    missing = REQUIRED_RAW_COLUMNS - set(df.columns)
+    if missing:
+        missing_str = ", ".join(sorted(missing))
+        raise ValueError(
+            "Input must be a raw long-format CSV with columns "
+            "run_id, seed, interval, metric_name, value. "
+            f"Missing: {missing_str}."
+        )
+
+
+def bootstrap_mean_ci(
+    values: np.ndarray,
+    n_bootstrap: int = 2000,
+    ci_level: float = 95.0,
+    seed: int = 42,
+) -> tuple[float, float, float]:
+    """
+    Compute sample mean and percentile bootstrap confidence interval.
+
+    Returns:
+        (mean, ci_lower, ci_upper)
+    """
+    if values.size == 0:
+        raise ValueError("Cannot bootstrap an empty value array.")
+    if n_bootstrap < 1000:
+        raise ValueError("n_bootstrap must be at least 1000.")
+    if not (0.0 < ci_level < 100.0):
+        raise ValueError("ci_level must be in (0, 100).")
+
+    rng = np.random.default_rng(seed)
+    n = values.size
+
+    bootstrap_means = np.empty(n_bootstrap, dtype=np.float64)
+    for i in range(n_bootstrap):
+        sample = rng.choice(values, size=n, replace=True)
+        bootstrap_means[i] = sample.mean()
+
+    alpha = (100.0 - ci_level) / 2.0
+    lower = float(np.percentile(bootstrap_means, alpha))
+    upper = float(np.percentile(bootstrap_means, 100.0 - alpha))
+    return float(values.mean()), lower, upper
+
+
+def summarize_raw_results(
+    raw_df: pd.DataFrame,
+    n_bootstrap: int = 2000,
+    ci_level: float = 95.0,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Summarize each metric in raw long-format simulation output."""
+    validate_raw_results_schema(raw_df)
+
     rows = []
-    for label, col_prefix in METRICS:
-        mean_col = f"{col_prefix}_mean"
-        std_col  = f"{col_prefix}_std"
-        if mean_col not in df.columns:
-            continue
-        rows.append({
-            "Metric": label,
-            "Mean":   round(df[mean_col].mean(), 2),
-            "Std":    round(df[std_col].mean(), 2),
-            "Min":    round(df[mean_col].min(), 2),
-            "Max":    round(df[mean_col].max(), 2),
-        })
+    metric_names = sorted(raw_df["metric_name"].astype(str).unique().tolist())
+
+    for metric_name in metric_names:
+        metric_vals = raw_df.loc[
+            raw_df["metric_name"] == metric_name,
+            "value",
+        ].astype(float).to_numpy(dtype=np.float64)
+
+        mean, ci_lower, ci_upper = bootstrap_mean_ci(
+            metric_vals,
+            n_bootstrap=n_bootstrap,
+            ci_level=ci_level,
+            seed=seed,
+        )
+
+        rows.append(
+            {
+                "metric_name": metric_name,
+                "n": int(metric_vals.size),
+                "mean": round(mean, 6),
+                "std": round(float(metric_vals.std(ddof=1)) if metric_vals.size > 1 else 0.0, 6),
+                f"ci{int(ci_level)}_lower": round(ci_lower, 6),
+                f"ci{int(ci_level)}_upper": round(ci_upper, 6),
+            }
+        )
+
     return pd.DataFrame(rows)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="simulation/outputs/results.csv")
+    parser.add_argument("--input",  default="simulation/outputs/raw_results.csv")
     parser.add_argument("--output", default="analysis/stats/summary_table.csv")
+    parser.add_argument("--bootstrap-samples", type=int, default=2000,
+                        help="Number of bootstrap resamples (must be >= 1000).")
+    parser.add_argument("--ci-level", type=float, default=95.0,
+                        help="Confidence interval level in percent.")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for bootstrap sampling.")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
@@ -71,13 +124,18 @@ def main():
             "Run the simulation pipeline first: python scripts/run_full_pipeline.py"
         )
 
-    df = pd.read_csv(args.input)
-    summary = compute_summary(df)
+    raw_df = pd.read_csv(args.input)
+    summary = summarize_raw_results(
+        raw_df,
+        n_bootstrap=args.bootstrap_samples,
+        ci_level=args.ci_level,
+        seed=args.seed,
+    )
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     summary.to_csv(args.output, index=False)
 
-    print("\n=== Performance Summary ===")
+    print("\n=== Performance Summary with Bootstrap CI ===")
     print(summary.to_string(index=False))
     print(f"\nSaved to: {args.output}")
 

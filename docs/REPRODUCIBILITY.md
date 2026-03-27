@@ -13,7 +13,7 @@ This document provides step-by-step instructions to fully reproduce all results 
 
 | Component | Version |
 |---|---|
-| Python | 3.9+ |
+| Python | 3.9-3.11 |
 | PyTorch | 2.1.x (CPU) |
 | NumPy | 1.24.x |
 | Pandas | 2.0.x |
@@ -42,6 +42,10 @@ source venv/bin/activate         # Linux/macOS
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
+
+The CLI entry points enforce the supported interpreter window at runtime.
+If you run under an unsupported Python version, scripts fail fast with a clear
+version error message.
 
 Alternatively, use Docker:
 ```bash

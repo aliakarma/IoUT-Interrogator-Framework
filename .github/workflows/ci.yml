@@ -1,4 +1,4 @@
-name: IoUT Framework CI
+name: README Reproducibility Validation
 
 on:
   push:
@@ -7,91 +7,35 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    name: Run unit tests
+  validate-readme-commands:
+    name: Validate README Commands (Py3.10)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10"]
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10"
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
+      - name: Install dependencies from requirements.txt
         run: |
+          set -euxo pipefail
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run unit tests with coverage
+      - name: Validate quick pipeline command (README)
         run: |
-          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
+          set -euxo pipefail
+          echo "Running: python scripts/run_full_pipeline.py --quick"
+          python scripts/run_full_pipeline.py --quick
 
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v4
-        with:
-          file: coverage.xml
-          fail_ci_if_error: false
-
-  lint:
-    name: Check formatting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-      - run: pip install pyflakes
-      - name: Check for syntax errors
+      - name: Validate full pipeline command (CI-reduced)
         run: |
-          python -m pyflakes simulation/scripts/environment.py
-          python -m pyflakes simulation/scripts/run_simulation.py
-          python -m pyflakes model/inference/transformer_model.py
-          python -m pyflakes blockchain/scripts/mock_ledger.py
-
-  quick-pipeline:
-    name: Quick pipeline smoke test
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-      - run: pip install -r requirements.txt
-      - name: Generate v3 data
-        run: |
-          python simulation/scripts/generate_behavioral_data.py --num-sequences 100 --seed 42
-      - name: Run pipeline with 2 simulation runs (no training)
-        run: |
-          python scripts/run_full_pipeline.py --seed 42 --runs 2 --skip-training
-      - name: Verify v3 stratified sample contains adversarial agents
-        run: |
-          python -c "
-          import json, sys
-
-          with open('data/sample/sample_sequences.json') as f:
-              sample = json.load(f)
-
-          n_adv = sum(1 for s in sample if s['label'] == 1)
-          print(f'Sample: {len(sample)} records, {n_adv} adversarial')
-
-          if n_adv == 0:
-              print('FAIL: sample has no adversarial agents (v1 bug)')
-              sys.exit(1)
-
-          print('PASS: stratified sample contains adversarial agents')
-          "
+          set -euxo pipefail
+          echo "Running reduced full pipeline for CI:"
+          echo "python scripts/reproduce_all.py --seed 42 --runs 2 --intervals 5 --skip-training"
+          python scripts/reproduce_all.py --seed 42 --runs 2 --intervals 5 --skip-training

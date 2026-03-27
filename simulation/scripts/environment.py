@@ -25,6 +25,7 @@ from simulation.scripts.generate_behavioral_data import (
     AR_PHI,
     NOISE_SIGMA,
 )
+from blockchain.scripts.mock_ledger import PBFTConsortium, TrustRecord
 
 
 @dataclass
@@ -110,6 +111,9 @@ class IoUTEnvironment:
         self.mon_cfg = self.config["monitoring"]
         self.mob_cfg = self.config["agent_mobility"]
         self.adv_cfg = self.config["adversarial_attacks"]
+        self.energy_cfg = self.config["energy"]
+        self.routing_cfg = self.config.get("routing", {})
+        self.blockchain_cfg = self.config.get("blockchain", {})
 
         self.channel = AcousticChannel(self.config["acoustic_channel"])
         self.area_side = math.sqrt(self.net_cfg["deployment_area_km2"]) * 1000  # metres
@@ -265,7 +269,7 @@ class IoUTEnvironment:
         tau_min = self.mon_cfg["trust_threshold_tau_min"]
         packets_attempted = 0
         packets_delivered = 0
-        reroute_success_prob = 0.92
+        load_estimate = self._estimate_network_load(method, trust_scores)
 
         for i, src in enumerate(self.agents):
             # Select a random destination agent
@@ -282,7 +286,12 @@ class IoUTEnvironment:
                 score = trust_scores.get(src.agent_id, 1.0)
                 if score < tau_min:
                     # Isolation can help or hurt depending on false positives.
-                    if self.rng.random() < reroute_success_prob:
+                    reroute_p = self._routing_success_probability(
+                        load=load_estimate,
+                        distance_m=dist,
+                        channel_noise=self._sample_channel_noise(),
+                    )
+                    if self.rng.random() < reroute_p:
                         packets_delivered += 1
                     continue
 
@@ -297,55 +306,124 @@ class IoUTEnvironment:
             return 0.0
         return packets_delivered / packets_attempted
 
-    # ------------------------------------------------------------------
-    # Energy simulation  [FIXED v2]
-    # ------------------------------------------------------------------
-    #
-    # ROOT CAUSE OF ENERGY BUG:
-    #   v1 modelled battery as 100 Wh = 360,000 J and used the Thorp-model
-    #   energy for ONE message per interval. This gave drain ≈ 5.97e-7 % per
-    #   step — completely invisible over 20 intervals (100% residual for all).
-    #
-    # FIX:
-    #   Use calibrated per-interval drain rates derived to match paper Figure 5
-    #   (starts ~97%, ends ~47-52% after 20 intervals) and paper's 5.8% overhead.
-    #   The drain_rate_pct is the total % battery consumed per 30-second interval,
-    #   reflecting realistic underwater operations: acoustic modem activity, sensors,
-    #   computation, and RF comms to surface gateway.
-    #
-    #   Drain rates (calibrated to paper Figure 5):
-    #     Static:   2.35% / interval  → residual after 20: ~50.0%
-    #     Bayesian: 2.48% / interval  → residual after 20: ~47.4%
-    #     Proposed: 2.49% / interval  → residual after 20: ~47.3%
-    #     Proposed overhead vs static: 5.8%  (matches paper Section VI.B)
+    def _sample_channel_noise(self) -> float:
+        """Sample channel-noise intensity used by routing-success model."""
+        mean = float(self.routing_cfg.get("noise_mean", 0.0))
+        std = float(self.routing_cfg.get("noise_std", 0.1))
+        return float(self.np_rng.normal(mean, std))
 
-    # Base drain rate for all methods (communication + sensing)
-    _DRAIN_BASE_PCT     = 2.35     # %/interval — static trust
-    _DRAIN_BAYESIAN_PCT = 2.48     # %/interval — bayesian overhead
-    _DRAIN_PROPOSED_PCT = 2.49     # %/interval — transformer + blockchain overhead
-    # Noise σ = 0.12%/interval for realistic run-to-run variation
-    _DRAIN_NOISE_STD    = 0.12
+    def _estimate_network_load(self, method: str, trust_scores: Dict[int, float]) -> float:
+        """Estimate normalized network load in [0,1] for current interval and method."""
+        base_load = float(self.routing_cfg.get("base_load", 0.55))
+        tau_min = float(self.mon_cfg["trust_threshold_tau_min"])
+
+        if method in ("proposed", "bayesian") and trust_scores:
+            isolated = sum(1 for s in trust_scores.values() if s < tau_min)
+            isolated_ratio = isolated / max(len(trust_scores), 1)
+            isolation_effect = float(self.routing_cfg.get("isolation_load_reduction", 0.25))
+            load = base_load - isolation_effect * isolated_ratio
+        else:
+            load = base_load
+
+        return float(np.clip(load, 0.0, 1.0))
+
+    def _routing_success_probability(self, load: float, distance_m: float, channel_noise: float) -> float:
+        """
+        Compute bounded reroute success probability p_success = f(load, distance, noise).
+
+        Higher load, longer distance, and higher noise reduce success.
+        """
+        ref_distance = float(self.routing_cfg.get("distance_ref_m", 1000.0))
+        w_load = float(self.routing_cfg.get("w_load", 0.35))
+        w_dist = float(self.routing_cfg.get("w_distance", 0.35))
+        w_noise = float(self.routing_cfg.get("w_noise", 0.30))
+        base_success = float(self.routing_cfg.get("base_success", 0.95))
+
+        # Normalize factors to [0,1] and combine as penalties.
+        load_n = float(np.clip(load, 0.0, 1.0))
+        dist_n = float(np.clip(distance_m / max(ref_distance, 1e-6), 0.0, 1.0))
+        noise_n = float(np.clip(abs(channel_noise), 0.0, 1.0))
+
+        penalty = (w_load * load_n) + (w_dist * dist_n) + (w_noise * noise_n)
+        p_success = base_success - penalty
+        return float(np.clip(p_success, 0.0, 1.0))
+
+    # ------------------------------------------------------------------
+    # Energy simulation (parametric model)
+    # ------------------------------------------------------------------
+
+    def _sample_packet_count(self, agent: Agent, method: str) -> float:
+        """Sample per-interval packet volume for one agent."""
+        base_packets = float(self.energy_cfg.get("base_packet_count", 1.2))
+        type_mult = (
+            float(self.energy_cfg.get("packet_multiplier_auv", 1.1))
+            if agent.agent_type == "auv"
+            else float(self.energy_cfg.get("packet_multiplier_sensor", 1.0))
+        )
+        method_mult = float(self.energy_cfg.get("packet_multiplier", {}).get(method, 1.0))
+        noise_std = float(self.energy_cfg.get("packet_count_noise_std", 0.08))
+        noisy = self.np_rng.normal(0.0, noise_std)
+        return max(0.0, base_packets * type_mult * method_mult + noisy)
+
+    def _sample_compute_cost(self, method: str) -> float:
+        """Return per-interval compute cost term for selected trust method."""
+        return float(self.energy_cfg.get("compute_cost", {}).get(method, 1.0))
+
+    def _sample_communication_distance(self, agent: Agent) -> float:
+        """Estimate interval communication distance (meters) using random peers."""
+        peers_per_interval = int(self.energy_cfg.get("distance_sample_peers", 3))
+        if len(self.agents) <= 1 or peers_per_interval <= 0:
+            return 0.0
+
+        peer_indices = self.np_rng.integers(0, len(self.agents), size=peers_per_interval)
+        dists = []
+        for idx in peer_indices:
+            peer = self.agents[int(idx)]
+            if peer.agent_id == agent.agent_id:
+                continue
+            dists.append(self._distance(agent, peer))
+
+        if not dists:
+            return 0.0
+        return float(np.mean(dists))
+
+    def _compute_interval_energy_drain_pct(
+        self,
+        packet_count: float,
+        compute_cost: float,
+        communication_distance: float,
+    ) -> float:
+        """
+        Parametric drain model:
+            drain_pct = alpha * packet_count + beta * compute_cost + gamma * communication_distance
+        """
+        alpha = float(self.energy_cfg.get("alpha", 1.35))
+        beta = float(self.energy_cfg.get("beta", 0.75))
+        gamma = float(self.energy_cfg.get("gamma", 0.00035))
+        noise_std = float(self.energy_cfg.get("drain_noise_std_pct", 0.12))
+
+        deterministic = (
+            alpha * packet_count +
+            beta * compute_cost +
+            gamma * communication_distance
+        )
+        noisy = deterministic + self.np_rng.normal(0.0, noise_std)
+        return max(0.0, float(noisy))
 
     def _simulate_energy_consumption(self, interval: int,
                                       method: str) -> Dict[int, float]:
-        """
-        Compute residual energy per agent after one monitoring interval.
-
-        Uses calibrated drain rates that reproduce paper Figure 5 depletion
-        curves (47-52% residual after 20 intervals, 5.8% overhead for proposed).
-        """
-        if method == "proposed":
-            base_drain = self._DRAIN_PROPOSED_PCT
-        elif method == "bayesian":
-            base_drain = self._DRAIN_BAYESIAN_PCT
-        else:  # static
-            base_drain = self._DRAIN_BASE_PCT
+        """Compute residual energy per agent after one monitoring interval."""
 
         energy_map = {}
         for agent in self.agents:
-            # Per-agent noise — simulates individual variation in duty cycling
-            noise   = self.np_rng.normal(0.0, self._DRAIN_NOISE_STD)
-            drain   = max(0.0, base_drain + noise)
+            packet_count = self._sample_packet_count(agent, method)
+            compute_cost = self._sample_compute_cost(method)
+            comm_distance = self._sample_communication_distance(agent)
+            drain = self._compute_interval_energy_drain_pct(
+                packet_count=packet_count,
+                compute_cost=compute_cost,
+                communication_distance=comm_distance,
+            )
             new_bat = max(0.0, agent.battery - drain)
             energy_map[agent.agent_id] = new_bat
             agent.battery = new_bat
@@ -503,17 +581,22 @@ class IoUTEnvironment:
             "trust_std_proposed": [],
             "trust_min_proposed": [],
             "trust_max_proposed": [],
+            "blockchain_commit_latency_ms": [],
+            "blockchain_failed_commits": [],
+            "blockchain_commit_success_rate": [],
         }
+
+        initial_battery = float(self.energy_cfg.get("initial_battery_pct", 100.0))
 
         # Reset agent batteries at start of run
         for agent in self.agents:
-            agent.battery = 100.0
+            agent.battery = initial_battery
 
         # Three independent battery trajectories — one per method
         # Each accumulates drain across intervals independently.
-        self._batt_proposed = {a.agent_id: 100.0 for a in self.agents}
-        self._batt_bayesian = {a.agent_id: 100.0 for a in self.agents}
-        self._batt_static   = {a.agent_id: 100.0 for a in self.agents}
+        self._batt_proposed = {a.agent_id: initial_battery for a in self.agents}
+        self._batt_bayesian = {a.agent_id: initial_battery for a in self.agents}
+        self._batt_static   = {a.agent_id: initial_battery for a in self.agents}
 
         # Running smoothed trust scores for proposed method
         smoothed_trust = {a.agent_id: 1.0 for a in self.agents}
@@ -529,6 +612,16 @@ class IoUTEnvironment:
 
         # Per-agent temporal feature history for sequence model inference
         feature_history: Dict[int, List[np.ndarray]] = {a.agent_id: [] for a in self.agents}
+
+        blockchain_enabled = bool(self.blockchain_cfg.get("enabled", True))
+        consortium = None
+        if blockchain_enabled:
+            consortium = PBFTConsortium(
+                num_validators=int(self.blockchain_cfg.get("num_validators", 9)),
+                num_byzantine=int(self.blockchain_cfg.get("num_byzantine", 0)),
+                seed=int(self.blockchain_cfg.get("seed", self.seed)),
+                network_latency_ms=float(self.blockchain_cfg.get("network_latency_ms", 500.0)),
+            )
 
         # Reset temporal behavioral states at run start.
         for agent in self.agents:
@@ -596,6 +689,39 @@ class IoUTEnvironment:
 
             # ---- Detection metrics: proposed ----
             prop_metrics = self._compute_detection_metrics(prop_eval_trust, interval_tau)
+
+            # ---- Blockchain trust-delta commits (proposed path) ----
+            interval_commit_latency_ms = 0.0
+            interval_failed_commits = 0
+            interval_commit_success_rate = 0.0
+
+            if consortium is not None:
+                lat_start = len(consortium.commit_latencies_ms)
+                rej_start = consortium.total_rejections
+                commits_attempted = 0
+                commits_success = 0
+
+                for a in self.agents:
+                    trust_score = float(prop_eval_trust.get(a.agent_id, 1.0))
+                    rec = TrustRecord(
+                        agent_id=f"agent_{a.agent_id:03d}",
+                        trust_score=round(trust_score, 6),
+                        interval=interval,
+                        is_anomalous=bool(trust_score < interval_tau),
+                        attack_type=str(a.attack_type) if a.attack_type else "none",
+                        timestamp=float(self.np_rng.uniform(0.0, 1.0) + interval),
+                        committed_by="interrogator_node_0",
+                    )
+                    commits_attempted += 1
+                    if consortium.submit_trust_delta(rec):
+                        commits_success += 1
+
+                latencies = consortium.commit_latencies_ms[lat_start:]
+                interval_commit_latency_ms = float(np.mean(latencies)) if latencies else 0.0
+                interval_failed_commits = int(consortium.total_rejections - rej_start)
+                interval_commit_success_rate = (
+                    commits_success / commits_attempted if commits_attempted > 0 else 0.0
+                )
 
             # ---- Bayesian trust baseline ----
             bay_trust = {}
@@ -686,6 +812,9 @@ class IoUTEnvironment:
             results["trust_std_proposed"].append(round(float(trust_vals.std()), 4))
             results["trust_min_proposed"].append(round(float(trust_vals.min()), 4))
             results["trust_max_proposed"].append(round(float(trust_vals.max()), 4))
+            results["blockchain_commit_latency_ms"].append(round(interval_commit_latency_ms, 4))
+            results["blockchain_failed_commits"].append(int(interval_failed_commits))
+            results["blockchain_commit_success_rate"].append(round(float(interval_commit_success_rate), 4))
 
         return results
 

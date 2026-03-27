@@ -37,6 +37,7 @@ import torch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+from compat import ensure_supported_python
 from model.inference.transformer_model import (
     TrustTransformer,
     set_seeds,
@@ -290,6 +291,7 @@ def run_inference(
 
 
 def main():
+    ensure_supported_python()
     parser = argparse.ArgumentParser(
         description="Run behavioral trust inference [FIXED v2]"
     )

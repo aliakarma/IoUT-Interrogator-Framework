@@ -21,6 +21,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from compat import ensure_supported_python
 from simulation.scripts.run_simulation import run_single_simulation
 
 
@@ -103,7 +104,11 @@ def run_sequence_ablation(args) -> pd.DataFrame:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run threshold and sequence-length sensitivity studies")
+    ensure_supported_python()
+    parser = argparse.ArgumentParser(
+        description="Run threshold and sequence-length sensitivity studies",
+        allow_abbrev=False,
+    )
     parser.add_argument("--config", default="simulation/configs/simulation_params.json")
     parser.add_argument("--runs", type=int, default=20)
     parser.add_argument("--intervals", type=int, default=20)
@@ -117,7 +122,12 @@ def main():
     parser.add_argument("--sequence-lengths", type=_parse_int_list, default="16,32,64")
     parser.add_argument("--threshold-output", default="analysis/stats/threshold_sensitivity.csv")
     parser.add_argument("--sequence-output", default="analysis/stats/sequence_length_ablation.csv")
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        parser.error(
+            f"Unrecognized arguments: {' '.join(unknown)}. "
+            "Run with --help to see supported flags."
+        )
 
     os.makedirs(os.path.dirname(args.threshold_output), exist_ok=True)
     os.makedirs(os.path.dirname(args.sequence_output), exist_ok=True)

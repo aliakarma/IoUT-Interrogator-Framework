@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 # Allow running from repository root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from compat import ensure_supported_python
 from simulation.scripts.environment import IoUTEnvironment
 from model.inference.transformer_model import load_model, compute_trust_score
 
@@ -128,7 +129,39 @@ def aggregate_runs(all_results: list) -> pd.DataFrame:
     return pd.DataFrame(agg)
 
 
+def build_raw_results_long(all_results: list, run_seeds: list) -> pd.DataFrame:
+    """
+    Flatten run-level simulation outputs into long format.
+
+    Output schema:
+      run_id, seed, interval, metric_name, value
+
+    One row per (run, interval, metric).
+    """
+    rows = []
+
+    for run_id, (result, seed) in enumerate(zip(all_results, run_seeds), start=1):
+        intervals = result.get("interval", [])
+        metric_names = [k for k in result.keys() if k != "interval"]
+
+        for idx, interval in enumerate(intervals):
+            for metric_name in metric_names:
+                value = result[metric_name][idx]
+                rows.append(
+                    {
+                        "run_id": run_id,
+                        "seed": int(seed),
+                        "interval": int(interval),
+                        "metric_name": metric_name,
+                        "value": float(value),
+                    }
+                )
+
+    return pd.DataFrame(rows, columns=["run_id", "seed", "interval", "metric_name", "value"])
+
+
 def main():
+    ensure_supported_python()
     parser = argparse.ArgumentParser(
         description="Run IoUT interrogator framework simulation"
     )
@@ -153,6 +186,11 @@ def main():
         "--output",
         default="simulation/outputs/results.csv",
         help="Output CSV path"
+    )
+    parser.add_argument(
+        "--raw-output",
+        default="simulation/outputs/raw_results.csv",
+        help="Output CSV path for long-format raw run-level metrics.",
     )
     parser.add_argument(
         "--use-transformer",
@@ -203,6 +241,10 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    os.makedirs(os.path.dirname(args.raw_output), exist_ok=True)
+
+    if os.path.abspath(args.output) == os.path.abspath(args.raw_output):
+        raise ValueError("--raw-output must be different from --output to avoid overwriting aggregated results.")
 
     print(f"\n=== IoUT Interrogator Framework Simulation ===")
     print(f"  Config:    {args.config}")
@@ -214,8 +256,10 @@ def main():
     print()
 
     all_results = []
+    run_seeds = []
     for run_idx in tqdm(range(args.runs), desc="Simulation runs"):
         seed = args.seed + run_idx
+        run_seeds.append(seed)
         result = run_single_simulation(
             config_path=args.config,
             seed=seed,
@@ -235,6 +279,10 @@ def main():
     agg_df = aggregate_runs(all_results)
     agg_df.to_csv(args.output, index=False)
     print(f"Saved aggregated results to: {args.output}")
+
+    raw_df = build_raw_results_long(all_results, run_seeds)
+    raw_df.to_csv(args.raw_output, index=False)
+    print(f"Saved raw run-level results to: {args.raw_output}")
 
     # Print summary table
     print("\n=== Summary (mean ± std across all intervals) ===")

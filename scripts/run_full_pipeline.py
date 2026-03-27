@@ -11,14 +11,19 @@ Runs the complete experiment pipeline in one command:
 Usage:
     python scripts/run_full_pipeline.py --seed 42 --runs 5
     python scripts/run_full_pipeline.py --seed 42 --runs 30  # full paper results
+    python scripts/run_full_pipeline.py --quick
 """
 
 import argparse
+import json
 import os
 import sys
+import tempfile
 import time
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from compat import ensure_supported_python
 
 
 def step(label: str):
@@ -38,12 +43,22 @@ def _parse_bool(value):
     raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Full IoUT reproducibility pipeline")
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Full IoUT reproducibility pipeline",
+        allow_abbrev=False,
+    )
     parser.add_argument("--seed",     type=int, default=42)
     parser.add_argument("--runs",     type=int, default=30,
                         help="Number of simulation runs (30 for paper results)")
     parser.add_argument("--intervals",type=int, default=20)
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help=(
+            "Quick mode: use 2 simulation seeds/runs, 2 training epochs, and 5 monitoring intervals."
+        ),
+    )
     parser.add_argument("--skip-training", action="store_true",
                         help="Skip model training (useful if checkpoint exists)")
     parser.add_argument(
@@ -54,18 +69,51 @@ def main():
         default=True,
         help="Enable transformer trust scores inside simulation loop (default: True).",
     )
-    parser.add_argument(
-        "--simulation-use-transformer",
-        type=_parse_bool,
-        nargs="?",
-        const=True,
-        default=None,
-        help="Deprecated alias for --use-transformer.",
-    )
-    args = parser.parse_args()
+    return parser
 
-    if args.simulation_use_transformer is not None:
-        args.use_transformer = args.simulation_use_transformer
+
+def _parse_args() -> argparse.Namespace:
+    parser = _build_parser()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        parser.error(
+            f"Unrecognized arguments: {' '.join(unknown)}. "
+            "Run with --help to see supported flags."
+        )
+    return args
+
+
+def _build_quick_train_config(base_config_path: str) -> str:
+    """Create a temporary training config that caps epochs to 2 for quick mode."""
+    with open(base_config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    config.setdefault("training", {})["epochs"] = 2
+
+    fd, temp_path = tempfile.mkstemp(prefix="transformer_quick_", suffix=".json")
+    os.close(fd)
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    return temp_path
+
+
+def main():
+    ensure_supported_python()
+    args = _parse_args()
+
+    effective_runs = args.runs
+    effective_intervals = args.intervals
+    effective_seed_count = 1
+
+    if args.quick:
+        effective_runs = 2
+        effective_intervals = 5
+        effective_seed_count = 2
+        print("[quick mode] Overrides applied:")
+        print("  simulation seed count (runs): 2")
+        print("  training epochs: 2")
+        print("  monitoring intervals: 5")
+        print()
 
     t0 = time.time()
 
@@ -84,17 +132,28 @@ def main():
     gen_main()
 
     # ── Step 2: Train model ───────────────────────────────────────────────
+    quick_train_config = None
     if not args.skip_training:
         step("2/5 — Train transformer trust model")
         from model.inference.train import main as train_main
+
+        train_config_path = "model/configs/transformer_config.json"
+        if args.quick:
+            quick_train_config = _build_quick_train_config(train_config_path)
+            train_config_path = quick_train_config
+
         _sys.argv = [
             "train.py",
-            "--config",         "model/configs/transformer_config.json",
+            "--config",         train_config_path,
             "--data",           "data/raw/behavioral_sequences.json",
             "--checkpoint-dir", "model/checkpoints/",
             "--seed",           str(args.seed),
         ]
-        train_main()
+        try:
+            train_main()
+        finally:
+            if quick_train_config and os.path.exists(quick_train_config):
+                os.remove(quick_train_config)
     else:
         step("2/5 — Skipping model training (--skip-training flag set)")
 
@@ -104,9 +163,9 @@ def main():
     _sys.argv = [
         "run_simulation.py",
         "--config", "simulation/configs/simulation_params.json",
-        "--runs",   str(args.runs),
+        "--runs",   str(effective_runs),
         "--seed",   str(args.seed),
-        "--intervals", str(args.intervals),
+        "--intervals", str(effective_intervals),
         "--output", "simulation/outputs/results.csv",
     ]
     if args.use_transformer:
@@ -152,8 +211,11 @@ def main():
     from analysis.statistical_summary import main as stats_main
     _sys.argv = [
         "statistical_summary.py",
-        "--input",  "simulation/outputs/results.csv",
+        "--input",  "simulation/outputs/raw_results.csv",
         "--output", "analysis/stats/summary_table.csv",
+        "--bootstrap-samples", "2000",
+        "--ci-level", "95",
+        "--seed", str(args.seed),
     ]
     stats_main()
 
@@ -165,6 +227,7 @@ def main():
     print(f"  Statistics: analysis/stats/summary_table.csv")
     print(f"  Results:    simulation/outputs/results.csv")
     print(f"  Checkpoint: model/checkpoints/best_model.pt")
+    print(f"  Seed count: {effective_seed_count}")
     print(f"{'='*60}\n")
 
 
