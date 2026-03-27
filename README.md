@@ -42,7 +42,7 @@ The implementation is designed for:
 
 ---
 
-## ⚠️ Scope and Research Positioning
+## ⚠️ Scope and Research Positioning {#scope-and-research-positioning}
 
 This repository corresponds to a **behavioral-level simulation framework**, not a full network or acoustic simulation system.
 
@@ -59,7 +59,7 @@ For full details, see:
 
 ---
 
-## ✨ Key Features
+## ✨ Key Features {#key-features}
 
 * 🤖 **Transformer-Based Trust Inference**
   Temporal modeling of agent behavior using sequence-based learning.
@@ -81,7 +81,7 @@ For full details, see:
 
 ---
 
-## 📈 Reproducible Results
+## 📈 Reproducible Results {#reproducible-results}
 
 Evaluation is conducted over:
 
@@ -113,7 +113,7 @@ Source files:
 
 ---
 
-## 🚀 Getting Started in 3 Steps
+## 🚀 Getting Started in 3 Steps {#getting-started-in-3-steps}
 
 ### Step 1: Clone & Install
 
@@ -160,7 +160,7 @@ All notebooks are fully compatible with Google Colab for cloud-based execution:
 
 ---
 
-## 🗂️ Repository Structure
+## 🗂️ Repository Structure {#repository-structure}
 
 ```text
 IoUT-Interrogator-Framework/
@@ -261,7 +261,7 @@ IoUT-Interrogator-Framework/
 
 ---
 
-## 🖥️ Environment Setup
+## 🖥️ Environment Setup {#environment-setup}
 
 ### System Requirements
 
@@ -298,7 +298,7 @@ docker run --gpus all -v $(pwd)/results:/app/results iout-interrogator:latest
 
 ---
 
-## � Supplementary Materials
+## 📋 Supplementary Materials {#supplementary-materials}
 
 Additional resources are available in the `docs/` directory:
 
@@ -310,7 +310,7 @@ Additional resources are available in the `docs/` directory:
 
 ---
 
-## 📚 Artifact Availability
+## 📚 Artifact Availability {#artifact-availability}
 
 This repository is designed for **full reproducibility and transparency**:
 
@@ -330,7 +330,7 @@ This repository is designed for **full reproducibility and transparency**:
 
 ---
 
-## 📖 Citation
+## 📖 Citation {#citation}
 
 ### BibTeX Format
 
@@ -350,13 +350,13 @@ Akarma, A., Syed, T. A., Jilani, A. K., Jan, S., Muneer, H., Khan, M. A., & Yu, 
 
 ---
 
-## 📄 License
+## 📄 License {#license}
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
 
 ---
 
-## 🤝 Reproducibility Commitment
+## 🤝 Reproducibility Commitment {#reproducibility-commitment}
 
 All code, simulation parameters, and evaluation procedures are provided to ensure **full transparency and reproducibility**.
 
