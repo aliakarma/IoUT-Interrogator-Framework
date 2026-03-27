@@ -10,7 +10,25 @@
 
 ---
 
-## 🔬 Overview
+## � Table of Contents
+
+- [🔬 Overview](#overview)
+- [⚠️ Scope and Research Positioning](#scope-and-research-positioning)
+- [✨ Key Features](#key-features)
+- [📈 Reproducible Results](#reproducible-results)
+- [🚀 Getting Started in 3 Steps](#getting-started-in-3-steps)
+- [📚 Interactive Notebooks](#interactive-notebooks)
+- [🗂️ Repository Structure](#repository-structure)
+- [🖥️ Environment Setup](#environment-setup)
+- [📋 Supplementary Materials](#supplementary-materials)
+- [📚 Artifact Availability](#artifact-availability)
+- [📖 Citation](#citation)
+- [📄 License](#license)
+- [🤝 Reproducibility Commitment](#reproducibility-commitment)
+
+---
+
+## 🔬 Overview {#overview}
 
 This repository provides a **research-grade, reproducible implementation** of an interrogator-based behavioral trust framework for autonomous Internet of Underwater Things (IoUT) environments.
 
