@@ -66,6 +66,101 @@ DEFAULT_NOISE_SIGMA = 0.08
 # Each time step partially inherits the previous step's state.
 AR_PHI = 0.4
 
+# Enable/disable temporal feature enrichment. Set to True to append temporal
+# features (delta, rolling_mean, rolling_std, z_score, slope) to each timestep.
+ENABLE_TEMPORAL_FEATURES = True
+
+
+def _compute_temporal_features(seq: np.ndarray, window: int = 3, normalize: bool = True) -> np.ndarray:
+    """
+    Compute temporal enrichment features and append to sequence.
+    
+    For each of the N base features, computes:
+      1. value: the original feature value
+      2. delta: current_value - previous_value
+      3. rolling_mean: mean over window
+      4. rolling_std: std over window
+      5. z_score: (value - global_mean) / global_std
+      6. slope: linear trend over last k steps
+    
+    All enriched features are normalized to mean=0, std=1 to prevent feature explosion.
+    
+    Args:
+        seq (np.ndarray): Base sequence of shape (K, N_base) where K=seq_len, N_base=5
+        window (int): Rolling window size for mean/std/slope
+        normalize (bool): Whether to apply z-score normalization to enriched features
+    
+    Returns:
+        np.ndarray: Enriched sequence of shape (K, N_base * 6) with 6 values per feature
+                   (normalized if normalize=True)
+    """
+    if not ENABLE_TEMPORAL_FEATURES:
+        return seq
+    
+    K, n_base = seq.shape
+    enriched = np.zeros((K, n_base * 6), dtype=np.float32)
+    
+    # Global statistics for z-score normalization
+    global_mean = seq.mean(axis=0, keepdims=True)  # (1, n_base)
+    global_std = seq.std(axis=0, keepdims=True)    # (1, n_base)
+    global_std = np.where(global_std < 1e-8, 1.0, global_std)  # Avoid div by zero
+    
+    for t in range(K):
+        feat_idx_out = 0
+        for feat_idx in range(n_base):
+            feat_col = seq[:, feat_idx]
+            val_t = feat_col[t]
+            
+            # 1. Original value
+            feat_val = val_t
+            
+            # 2. Delta: change from previous step
+            delta_t = 0.0 if t == 0 else (val_t - feat_col[t-1])
+            
+            # 3. Rolling mean over window
+            win_start = max(0, t - window + 1)
+            rolling_mean_t = float(feat_col[win_start:t+1].mean())
+            
+            # 4. Rolling std over window
+            rolling_std_t = float(feat_col[win_start:t+1].std())
+            
+            # 5. Z-score 
+            zscore_t = (val_t - global_mean[0, feat_idx]) / global_std[0, feat_idx]
+            
+            # 6. Slope: linear trend over last window steps
+            if t == 0:
+                slope_t = 0.0
+            else:
+                slope_start = max(0, t - window + 1)
+                x_vals = np.arange(slope_start, t + 1, dtype=np.float32)
+                y_vals = feat_col[slope_start:t+1]
+                if len(x_vals) > 1:
+                    slope_t = float(np.polyfit(x_vals, y_vals, 1)[0])
+                else:
+                    slope_t = 0.0
+            
+            # Store: value + delta + rolling_mean + rolling_std + zscore + slope
+            enriched[t, feat_idx_out:feat_idx_out+6] = np.array([
+                feat_val,
+                np.clip(delta_t, -1.0, 1.0),
+                rolling_mean_t,
+                rolling_std_t,
+                np.clip(zscore_t, -3.0, 3.0),
+                np.clip(slope_t, -1.0, 1.0),
+            ], dtype=np.float32)
+            feat_idx_out += 6
+    
+    # ✓ CRITICAL: Normalize enriched features to mean=0, std=1 per dimension
+    # This prevents feature explosion and ensures numerical stability
+    if normalize:
+        enriched_mean = enriched.mean(axis=0, keepdims=True)
+        enriched_std = enriched.std(axis=0, keepdims=True)
+        enriched_std = np.where(enriched_std < 1e-8, 1.0, enriched_std)
+        enriched = (enriched - enriched_mean) / enriched_std
+        enriched = np.clip(enriched, -5.0, 5.0)  # Clip to prevent outliers
+    
+    return enriched
+
 
 def _ar1_sequence(mean_vec: np.ndarray, K: int,
                   rng: np.random.Generator,
@@ -269,11 +364,12 @@ def generate_dataset(
     # ── Legitimate agents ─────────────────────────────────────────────────
     for i in range(n_legit):
         seq = generate_legitimate_sequence(K, rng_legit, noise_sigma=noise_sigma)
+        seq_enriched = _compute_temporal_features(seq, window=3)
         sequences.append({
             "agent_id":   i,
             "label":      0,
             "attack_type":"none",
-            "sequence":   seq.tolist(),
+            "sequence":   seq_enriched.tolist(),
         })
         rows.append({"agent_id": i, "label": 0, "attack_type": "none"})
 
@@ -283,11 +379,12 @@ def generate_dataset(
         agent_id  = n_legit + j
         atk = _sample_attack_type(rng_adv, attack_mix=attack_mix, index=j)
         seq = generate_adversarial_sequence(K, atk, rng_adv, noise_sigma=noise_sigma)
+        seq_enriched = _compute_temporal_features(seq, window=3)
         sequences.append({
             "agent_id":   agent_id,
             "label":      1,
             "attack_type": atk,
-            "sequence":   seq.tolist(),
+            "sequence":   seq_enriched.tolist(),
         })
         rows.append({"agent_id": agent_id, "label": 1, "attack_type": atk})
 
