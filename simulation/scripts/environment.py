@@ -23,7 +23,7 @@ from simulation.scripts.generate_behavioral_data import (
     _ADV_MEANS,
     _LEGIT_MEAN,
     AR_PHI,
-    NOISE_SIGMA,
+    DEFAULT_NOISE_SIGMA,
 )
 from blockchain.scripts.mock_ledger import PBFTConsortium, TrustRecord
 
@@ -99,7 +99,10 @@ class IoUTEnvironment:
     """
 
     def __init__(self, config_path: str = "simulation/configs/simulation_params.json",
-                 seed: int = 42):
+                 seed: int = 42,
+                 enable_energy_model: bool = True,
+                 enable_routing_model: bool = True,
+                 enable_blockchain: bool = True):
         with open(config_path, "r") as f:
             self.config = json.load(f)
 
@@ -118,6 +121,10 @@ class IoUTEnvironment:
         self.channel = AcousticChannel(self.config["acoustic_channel"])
         self.area_side = math.sqrt(self.net_cfg["deployment_area_km2"]) * 1000  # metres
 
+        self.enable_energy_model = bool(enable_energy_model)
+        self.enable_routing_model = bool(enable_routing_model)
+        self.enable_blockchain = bool(enable_blockchain)
+
         self.agents: List[Agent] = []
         self._deploy_agents()
         self._init_behavior_dynamics()
@@ -125,7 +132,7 @@ class IoUTEnvironment:
     def _init_behavior_dynamics(self):
         """Initialise per-agent temporal feature dynamics to match training data."""
         self._ar_phi = float(AR_PHI)
-        self._noise_sigma = float(NOISE_SIGMA)
+        self._noise_sigma = float(DEFAULT_NOISE_SIGMA)
         self._feature_mean: Dict[int, np.ndarray] = {}
         self._feature_state: Dict[int, np.ndarray] = {}
 
@@ -258,7 +265,7 @@ class IoUTEnvironment:
     # ------------------------------------------------------------------
 
     def _simulate_interval_pdr(self, trust_scores: Dict[int, float],
-                                 method: str) -> float:
+                                 method: str) -> tuple[float, Dict[str, float]]:
         """
         Compute packet delivery ratio for one monitoring interval.
 
@@ -270,6 +277,9 @@ class IoUTEnvironment:
         packets_attempted = 0
         packets_delivered = 0
         load_estimate = self._estimate_network_load(method, trust_scores)
+        reroute_distances: List[float] = []
+        reroute_noises: List[float] = []
+        reroute_probs: List[float] = []
 
         for i, src in enumerate(self.agents):
             # Select a random destination agent
@@ -286,11 +296,15 @@ class IoUTEnvironment:
                 score = trust_scores.get(src.agent_id, 1.0)
                 if score < tau_min:
                     # Isolation can help or hurt depending on false positives.
+                    noise_sample = self._sample_channel_noise()
                     reroute_p = self._routing_success_probability(
                         load=load_estimate,
                         distance_m=dist,
-                        channel_noise=self._sample_channel_noise(),
+                        channel_noise=noise_sample,
                     )
+                    reroute_distances.append(float(dist))
+                    reroute_noises.append(float(noise_sample))
+                    reroute_probs.append(float(reroute_p))
                     if self.rng.random() < reroute_p:
                         packets_delivered += 1
                     continue
@@ -303,8 +317,18 @@ class IoUTEnvironment:
                 packets_delivered += 1
 
         if packets_attempted == 0:
-            return 0.0
-        return packets_delivered / packets_attempted
+            pdr = 0.0
+        else:
+            pdr = packets_delivered / packets_attempted
+
+        routing_debug = {
+            "routing_load": float(load_estimate),
+            "routing_distance": float(np.mean(reroute_distances)) if reroute_distances else 0.0,
+            "routing_noise": float(np.mean(reroute_noises)) if reroute_noises else 0.0,
+            "routing_probability": float(np.mean(reroute_probs)) if reroute_probs else 0.0,
+            "routing_reroute_attempts": float(len(reroute_probs)),
+        }
+        return pdr, routing_debug
 
     def _sample_channel_noise(self) -> float:
         """Sample channel-noise intensity used by routing-success model."""
@@ -333,6 +357,13 @@ class IoUTEnvironment:
 
         Higher load, longer distance, and higher noise reduce success.
         """
+        if not self.enable_routing_model:
+            return float(np.clip(
+                self.routing_cfg.get("fixed_reroute_probability", 0.85),
+                0.0,
+                1.0,
+            ))
+
         ref_distance = float(self.routing_cfg.get("distance_ref_m", 1000.0))
         w_load = float(self.routing_cfg.get("w_load", 0.35))
         w_dist = float(self.routing_cfg.get("w_distance", 0.35))
@@ -397,6 +428,9 @@ class IoUTEnvironment:
         Parametric drain model:
             drain_pct = alpha * packet_count + beta * compute_cost + gamma * communication_distance
         """
+        if not self.enable_energy_model:
+            return float(max(0.0, self.energy_cfg.get("constant_drain_pct", 1.2)))
+
         alpha = float(self.energy_cfg.get("alpha", 1.35))
         beta = float(self.energy_cfg.get("beta", 0.75))
         gamma = float(self.energy_cfg.get("gamma", 0.00035))
@@ -411,14 +445,21 @@ class IoUTEnvironment:
         return max(0.0, float(noisy))
 
     def _simulate_energy_consumption(self, interval: int,
-                                      method: str) -> Dict[int, float]:
+                                      method: str) -> tuple[Dict[int, float], Dict[str, float]]:
         """Compute residual energy per agent after one monitoring interval."""
 
         energy_map = {}
+        packet_samples: List[float] = []
+        compute_samples: List[float] = []
+        distance_samples: List[float] = []
+
         for agent in self.agents:
             packet_count = self._sample_packet_count(agent, method)
             compute_cost = self._sample_compute_cost(method)
             comm_distance = self._sample_communication_distance(agent)
+            packet_samples.append(float(packet_count))
+            compute_samples.append(float(compute_cost))
+            distance_samples.append(float(comm_distance))
             drain = self._compute_interval_energy_drain_pct(
                 packet_count=packet_count,
                 compute_cost=compute_cost,
@@ -428,7 +469,12 @@ class IoUTEnvironment:
             energy_map[agent.agent_id] = new_bat
             agent.battery = new_bat
 
-        return energy_map
+        component_debug = {
+            "packet_count": float(np.mean(packet_samples)) if packet_samples else 0.0,
+            "compute_cost": float(np.mean(compute_samples)) if compute_samples else 0.0,
+            "communication_distance": float(np.mean(distance_samples)) if distance_samples else 0.0,
+        }
+        return energy_map, component_debug
 
     # ------------------------------------------------------------------
     # Bayesian trust baseline
@@ -584,6 +630,24 @@ class IoUTEnvironment:
             "blockchain_commit_latency_ms": [],
             "blockchain_failed_commits": [],
             "blockchain_commit_success_rate": [],
+            "packet_count_proposed": [],
+            "packet_count_bayesian": [],
+            "packet_count_static": [],
+            "compute_cost_proposed": [],
+            "compute_cost_bayesian": [],
+            "compute_cost_static": [],
+            "communication_distance_proposed": [],
+            "communication_distance_bayesian": [],
+            "communication_distance_static": [],
+            "routing_load_proposed": [],
+            "routing_load_bayesian": [],
+            "routing_load_static": [],
+            "routing_distance_proposed": [],
+            "routing_distance_bayesian": [],
+            "routing_distance_static": [],
+            "routing_noise_proposed": [],
+            "routing_noise_bayesian": [],
+            "routing_noise_static": [],
         }
 
         initial_battery = float(self.energy_cfg.get("initial_battery_pct", 100.0))
@@ -613,7 +677,7 @@ class IoUTEnvironment:
         # Per-agent temporal feature history for sequence model inference
         feature_history: Dict[int, List[np.ndarray]] = {a.agent_id: [] for a in self.agents}
 
-        blockchain_enabled = bool(self.blockchain_cfg.get("enabled", True))
+        blockchain_enabled = bool(self.blockchain_cfg.get("enabled", True)) and self.enable_blockchain
         consortium = None
         if blockchain_enabled:
             consortium = PBFTConsortium(
@@ -740,9 +804,9 @@ class IoUTEnvironment:
             static_metrics = self._compute_detection_metrics(static_trust, interval_tau)
 
             # ---- PDR ----
-            pdr_prop = self._simulate_interval_pdr(prop_eval_trust, "proposed")
-            pdr_bay = self._simulate_interval_pdr(bay_trust, "bayesian")
-            pdr_static = self._simulate_interval_pdr(static_trust, "static")
+            pdr_prop, routing_prop = self._simulate_interval_pdr(prop_eval_trust, "proposed")
+            pdr_bay, routing_bay = self._simulate_interval_pdr(bay_trust, "bayesian")
+            pdr_static, routing_static = self._simulate_interval_pdr(static_trust, "static")
 
             # ---- Energy tracking ----
             # Three independent battery trajectories — one per method.
@@ -753,21 +817,21 @@ class IoUTEnvironment:
             # Proposed trajectory drain
             for a in self.agents:
                 a.battery = self._batt_proposed[a.agent_id]
-            self._simulate_energy_consumption(interval, "proposed")
+            _, energy_prop_components = self._simulate_energy_consumption(interval, "proposed")
             energy_prop = np.mean([a.battery for a in self.agents])
             self._batt_proposed = {a.agent_id: a.battery for a in self.agents}
 
             # Bayesian trajectory drain
             for a in self.agents:
                 a.battery = self._batt_bayesian[a.agent_id]
-            self._simulate_energy_consumption(interval, "bayesian")
+            _, energy_bay_components = self._simulate_energy_consumption(interval, "bayesian")
             energy_bay = np.mean([a.battery for a in self.agents])
             self._batt_bayesian = {a.agent_id: a.battery for a in self.agents}
 
             # Static trajectory drain
             for a in self.agents:
                 a.battery = self._batt_static[a.agent_id]
-            self._simulate_energy_consumption(interval, "static")
+            _, energy_static_components = self._simulate_energy_consumption(interval, "static")
             energy_static = np.mean([a.battery for a in self.agents])
             self._batt_static = {a.agent_id: a.battery for a in self.agents}
 
@@ -815,6 +879,24 @@ class IoUTEnvironment:
             results["blockchain_commit_latency_ms"].append(round(interval_commit_latency_ms, 4))
             results["blockchain_failed_commits"].append(int(interval_failed_commits))
             results["blockchain_commit_success_rate"].append(round(float(interval_commit_success_rate), 4))
+            results["packet_count_proposed"].append(round(float(energy_prop_components["packet_count"]), 6))
+            results["packet_count_bayesian"].append(round(float(energy_bay_components["packet_count"]), 6))
+            results["packet_count_static"].append(round(float(energy_static_components["packet_count"]), 6))
+            results["compute_cost_proposed"].append(round(float(energy_prop_components["compute_cost"]), 6))
+            results["compute_cost_bayesian"].append(round(float(energy_bay_components["compute_cost"]), 6))
+            results["compute_cost_static"].append(round(float(energy_static_components["compute_cost"]), 6))
+            results["communication_distance_proposed"].append(round(float(energy_prop_components["communication_distance"]), 6))
+            results["communication_distance_bayesian"].append(round(float(energy_bay_components["communication_distance"]), 6))
+            results["communication_distance_static"].append(round(float(energy_static_components["communication_distance"]), 6))
+            results["routing_load_proposed"].append(round(float(routing_prop["routing_load"]), 6))
+            results["routing_load_bayesian"].append(round(float(routing_bay["routing_load"]), 6))
+            results["routing_load_static"].append(round(float(routing_static["routing_load"]), 6))
+            results["routing_distance_proposed"].append(round(float(routing_prop["routing_distance"]), 6))
+            results["routing_distance_bayesian"].append(round(float(routing_bay["routing_distance"]), 6))
+            results["routing_distance_static"].append(round(float(routing_static["routing_distance"]), 6))
+            results["routing_noise_proposed"].append(round(float(routing_prop["routing_noise"]), 6))
+            results["routing_noise_bayesian"].append(round(float(routing_bay["routing_noise"]), 6))
+            results["routing_noise_static"].append(round(float(routing_static["routing_noise"]), 6))
 
         return results
 

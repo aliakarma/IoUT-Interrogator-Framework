@@ -46,9 +46,18 @@ def run_single_simulation(config_path: str, seed: int,
                            quantized: bool = True,
                            log_trust_stats: bool = False,
                            tau_min_override: float = None,
-                           sequence_len_override: int = None) -> dict:
+                           sequence_len_override: int = None,
+                           disable_energy_model: bool = False,
+                           disable_routing_model: bool = False,
+                           disable_blockchain: bool = False) -> dict:
     """Run one simulation trial and return interval-level results."""
-    env = IoUTEnvironment(config_path=config_path, seed=seed)
+    env = IoUTEnvironment(
+        config_path=config_path,
+        seed=seed,
+        enable_energy_model=not disable_energy_model,
+        enable_routing_model=not disable_routing_model,
+        enable_blockchain=not disable_blockchain,
+    )
     if tau_min_override is not None:
         env.mon_cfg["trust_threshold_tau_min"] = float(tau_min_override)
 
@@ -238,6 +247,21 @@ def main():
         default=None,
         help="Optional override for transformer sequence length K.",
     )
+    parser.add_argument(
+        "--disable-energy-model",
+        action="store_true",
+        help="Disable parametric energy model and use constant drain fallback.",
+    )
+    parser.add_argument(
+        "--disable-routing-model",
+        action="store_true",
+        help="Disable load/distance/noise routing model and use fixed reroute probability.",
+    )
+    parser.add_argument(
+        "--disable-blockchain",
+        action="store_true",
+        help="Disable blockchain trust commit integration during simulation.",
+    )
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -252,6 +276,9 @@ def main():
     print(f"  Intervals: {args.intervals}")
     print(f"  Base seed: {args.seed}")
     print(f"  Use transformer trust: {args.use_transformer}")
+    print(f"  Disable energy model: {args.disable_energy_model}")
+    print(f"  Disable routing model: {args.disable_routing_model}")
+    print(f"  Disable blockchain: {args.disable_blockchain}")
     print(f"  Output:    {args.output}")
     print()
 
@@ -272,6 +299,9 @@ def main():
             log_trust_stats=args.log_trust_stats,
             tau_min_override=args.tau_min,
             sequence_len_override=args.sequence_len,
+            disable_energy_model=args.disable_energy_model,
+            disable_routing_model=args.disable_routing_model,
+            disable_blockchain=args.disable_blockchain,
         )
         all_results.append(result)
 
