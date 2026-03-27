@@ -50,6 +50,155 @@ METRIC_MAPPING = {
 # List of models to include in comparison
 MODELS_LIST = ['proposed', 'bayesian', 'static', 'logistic_regression', 'random_forest', 'lstm']
 CORE_METRICS = ['C', 'RP', 'P', 'A', 'TI']
+CLASSIFICATION_METRICS = ['accuracy', 'precision', 'recall', 'f1']
+
+
+def _to_unit_interval(value: float) -> float:
+    """Convert metric value to [0,1] scale with safe clipping.
+
+    Handles either fractional values (0..1) or percentage-style values (0..100).
+    """
+    v = float(value)
+    if np.isnan(v):
+        return np.nan
+    if v > 1.0 and v <= 100.0:
+        v = v / 100.0
+    return float(np.clip(v, 0.0, 1.0))
+
+
+def _extract_sim_metric(metric_name: str, model: str) -> Optional[str]:
+    suffix = f"_{model}"
+    if not isinstance(metric_name, str) or not metric_name.endswith(suffix):
+        return None
+    return metric_name[: -len(suffix)]
+
+
+def build_classification_results(
+    calibration_metrics: Optional[Dict],
+    baseline_results: Optional[pd.DataFrame],
+    lstm_baseline: Optional[pd.DataFrame],
+) -> pd.DataFrame:
+    """Build supervised classification-only table.
+
+    Models: transformer_v4, logistic_regression, random_forest, lstm
+    Metrics: accuracy, precision, recall, f1 in [0,1]
+    """
+    rows: List[Dict[str, object]] = []
+
+    # Transformer v4 from evaluation_metrics.json
+    if calibration_metrics is not None and 'test' in calibration_metrics:
+        test = calibration_metrics['test']
+        rows.append({
+            'model': 'transformer_v4',
+            'accuracy': _to_unit_interval(float(test.get('accuracy', np.nan))),
+            'precision': _to_unit_interval(float(test.get('precision', np.nan))),
+            'recall': _to_unit_interval(float(test.get('recall', np.nan))),
+            'f1': _to_unit_interval(float(test.get('f1', np.nan))),
+        })
+
+    # Classical baselines from baseline_results.csv (test split)
+    if baseline_results is not None and not baseline_results.empty:
+        test_df = baseline_results[baseline_results['split'] == 'test'].copy()
+        for model_name in ['logistic_regression', 'random_forest']:
+            model_df = test_df[test_df['model'] == model_name]
+            if model_df.empty:
+                continue
+            row = model_df.iloc[0]
+            rows.append({
+                'model': model_name,
+                'accuracy': _to_unit_interval(float(row.get('accuracy', np.nan))),
+                'precision': _to_unit_interval(float(row.get('precision', np.nan))),
+                'recall': _to_unit_interval(float(row.get('recall', np.nan))),
+                'f1': _to_unit_interval(float(row.get('f1', np.nan))),
+            })
+
+    # LSTM baseline from lstm_baseline_results.csv (test split)
+    if lstm_baseline is not None and not lstm_baseline.empty:
+        test_df = lstm_baseline[lstm_baseline['split'] == 'test'].copy() if 'split' in lstm_baseline.columns else lstm_baseline
+        if not test_df.empty:
+            row = test_df.iloc[0]
+            rows.append({
+                'model': 'lstm',
+                'accuracy': _to_unit_interval(float(row.get('accuracy', np.nan))),
+                'precision': _to_unit_interval(float(row.get('precision', np.nan))),
+                'recall': _to_unit_interval(float(row.get('recall', np.nan))),
+                'f1': _to_unit_interval(float(row.get('f1', np.nan))),
+            })
+
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+
+    # Enforce column order and deterministic model order
+    result = result[['model'] + CLASSIFICATION_METRICS]
+    model_order = ['transformer_v4', 'logistic_regression', 'random_forest', 'lstm']
+    result['model'] = pd.Categorical(result['model'], categories=model_order, ordered=True)
+    result = result.sort_values('model').reset_index(drop=True)
+    result['model'] = result['model'].astype(str)
+    return result
+
+
+def build_simulation_results(
+    multi_seed_summary: Optional[pd.DataFrame],
+    raw_results: Optional[pd.DataFrame],
+) -> pd.DataFrame:
+    """Build simulation-only table for proposed/bayesian/static metrics.
+
+    Output is long format with consistent per-metric min-max normalization in [0,1].
+    """
+    sim_rows: List[Dict[str, object]] = []
+    sim_models = ['proposed', 'bayesian', 'static']
+
+    if multi_seed_summary is not None and not multi_seed_summary.empty:
+        for _, row in multi_seed_summary.iterrows():
+            metric_name = str(row.get('metric_name', ''))
+            mean_val = float(row.get('mean', np.nan))
+            for model in sim_models:
+                base_metric = _extract_sim_metric(metric_name, model)
+                if base_metric is None:
+                    continue
+                sim_rows.append({
+                    'model': model,
+                    'metric_name': 'trust_index' if base_metric == 'trust_mean' else base_metric,
+                    'value': mean_val,
+                })
+                break
+    elif raw_results is not None and not raw_results.empty:
+        grouped = raw_results.groupby('metric_name', as_index=False)['value'].mean()
+        for _, row in grouped.iterrows():
+            metric_name = str(row.get('metric_name', ''))
+            mean_val = float(row.get('value', np.nan))
+            for model in sim_models:
+                base_metric = _extract_sim_metric(metric_name, model)
+                if base_metric is None:
+                    continue
+                sim_rows.append({
+                    'model': model,
+                    'metric_name': 'trust_index' if base_metric == 'trust_mean' else base_metric,
+                    'value': mean_val,
+                })
+                break
+
+    result = pd.DataFrame(sim_rows)
+    if result.empty:
+        return result
+
+    # Consistent scaling across all simulation metrics: min-max per metric over models.
+    result['value_scaled_0_1'] = np.nan
+    for metric in result['metric_name'].unique():
+        metric_mask = result['metric_name'] == metric
+        values = result.loc[metric_mask, 'value'].astype(float)
+        vmin = float(values.min())
+        vmax = float(values.max())
+        if np.isclose(vmax, vmin):
+            result.loc[metric_mask, 'value_scaled_0_1'] = 0.5
+        else:
+            result.loc[metric_mask, 'value_scaled_0_1'] = (values - vmin) / (vmax - vmin)
+
+    result['value_scaled_0_1'] = result['value_scaled_0_1'].astype(float).clip(0.0, 1.0)
+    result['scaling'] = 'minmax_per_metric_over_models'
+    result = result.sort_values(['metric_name', 'model']).reset_index(drop=True)
+    return result
 
 
 def ensure_output_dir(output_dir: str) -> Path:
@@ -485,6 +634,15 @@ def export_results(
     combined_table = compute_combined_results_table(
         multi_seed_summary, raw_results, baseline_results, lstm_baseline
     )
+    classification_results = build_classification_results(
+        calibration_metrics=calibration_metrics,
+        baseline_results=baseline_results,
+        lstm_baseline=lstm_baseline,
+    )
+    simulation_results = build_simulation_results(
+        multi_seed_summary=multi_seed_summary,
+        raw_results=raw_results,
+    )
     
     # Export results
     logger.info("\n=== EXPORTING RESULTS ===")
@@ -520,6 +678,18 @@ def export_results(
     if not combined_table.empty:
         combined_table.to_csv(output_path / 'combined_results_table.csv', index=False)
         logger.info(f"✓ Exported combined_results_table.csv ({len(combined_table)} rows)")
+
+    if not classification_results.empty:
+        classification_results.to_csv(output_path / 'classification_results.csv', index=False)
+        logger.info(f"✓ Exported classification_results.csv ({len(classification_results)} rows)")
+    else:
+        logger.info("⊘ Skipping classification_results.csv (not available)")
+
+    if not simulation_results.empty:
+        simulation_results.to_csv(output_path / 'simulation_results.csv', index=False)
+        logger.info(f"✓ Exported simulation_results.csv ({len(simulation_results)} rows)")
+    else:
+        logger.info("⊘ Skipping simulation_results.csv (not available)")
     
     logger.info(f"\n=== SUCCESS ===")
     logger.info(f"All results exported to: {output_path.resolve()}")

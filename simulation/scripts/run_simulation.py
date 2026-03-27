@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from compat import ensure_supported_python
 from simulation.scripts.environment import IoUTEnvironment
 from model.inference.transformer_model import load_model, compute_trust_score
+from simulation.scripts.generate_behavioral_data import _compute_temporal_features
 
 
 def _parse_bool(value):
@@ -105,6 +106,8 @@ def run_single_simulation(config_path: str, seed: int,
                 raise
 
         def _trust_fn(sequence_window: np.ndarray) -> float:
+            if sequence_window.shape[1] != int(model_cfg["architecture"]["input_dim"]):
+                sequence_window = _compute_temporal_features(sequence_window)
             return compute_trust_score(
                 model,
                 sequence_window,

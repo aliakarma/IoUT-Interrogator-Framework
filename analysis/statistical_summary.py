@@ -14,7 +14,7 @@ import argparse
 import os
 import re
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -163,7 +163,7 @@ def summarize_seed_level(
     return pd.DataFrame(rows)
 
 
-def _split_metric_model(metric_name: str) -> Tuple[str, str] | Tuple[None, None]:
+def _split_metric_model(metric_name: str) -> Tuple[Optional[str], Optional[str]]:
     """Split metric names like accuracy_proposed into (accuracy, proposed)."""
     m = re.match(r"^(?P<base>.+)_(?P<model>proposed|bayesian|static)$", str(metric_name))
     if not m:
