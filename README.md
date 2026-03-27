@@ -15,7 +15,7 @@
 [![Paper](https://img.shields.io/badge/Paper-Under%20Review-FF6B35?style=for-the-badge&logo=arxiv&logoColor=white)](#)
 [![DOI](https://img.shields.io/badge/DOI-Pending-blue?style=for-the-badge&logo=doi&logoColor=white)](#)
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](#-notebooks)
 
 ---
 
