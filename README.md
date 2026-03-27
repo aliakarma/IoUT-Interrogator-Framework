@@ -59,7 +59,6 @@
 
 This repository provides a **research-grade, reproducible implementation** of an interrogator-based behavioral trust framework for autonomous **Internet of Underwater Things (IoUT)** environments.
 
-```mermaid
 graph LR
     A[Agent Behavior] --> B[Metadata Collection]
     B --> C[Transformer Model]
