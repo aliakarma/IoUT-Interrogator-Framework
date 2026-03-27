@@ -161,10 +161,27 @@ def main():
         default=20,
         help="Minimum samples per class for stratified calibration checks.",
     )
+    parser.add_argument(
+        "--use-focal-loss",
+        action="store_true",
+        help="Use Focal Loss instead of BCE for handling class imbalance (improves hard example detection).",
+    )
+    parser.add_argument(
+        "--focal-alpha",
+        type=float,
+        default=0.75,
+        help="Alpha parameter for Focal Loss (weighting factor for class balance; default: 0.75).",
+    )
+    parser.add_argument(
+        "--focal-gamma",
+        type=float,
+        default=2.0,
+        help="Gamma parameter for Focal Loss (focusing parameter for hard examples; default: 2.0).",
+    )
     args = parser.parse_args()
 
     # ── Pre-flight checks ─────────────────────────────────────────────────
-    print("=== IoUT Trust Transformer Training [v2 — FIXED] ===")
+    print("=== IoUT Trust Transformer Training [v3 — Focal Loss + Threshold Sweep] ===")
     print(f"  Config:          {args.config}")
     print(f"  Data:            {args.data}")
     print(f"  Checkpoint dir:  {args.checkpoint_dir}")
@@ -173,6 +190,7 @@ def main():
     print(f"  Label smoothing: {args.label_smoothing}")
     print(f"  Inference temp:  {args.inference_temperature}")
     print(f"  Calib min/class: {args.calibration_min_per_class}")
+    print(f"  Use Focal Loss:  {'yes (alpha={}, gamma={})'.format(args.focal_alpha, args.focal_gamma) if args.use_focal_loss else 'no (using BCE)'}")
     print()
 
     if not os.path.exists(args.config):
@@ -188,9 +206,26 @@ def main():
     # Set seed before anything else
     set_seeds(args.seed)
 
+    # ── Load and modify config with focal loss settings ────────────────────
+    with open(args.config) as f:
+        config = json.load(f)
+    
+    # Apply focal loss settings from CLI
+    if 'training' not in config:
+        config['training'] = {}
+    
+    config['training']['use_focal_loss'] = args.use_focal_loss
+    config['training']['focal_alpha'] = args.focal_alpha
+    config['training']['focal_gamma'] = args.focal_gamma
+    
+    # Save modified config temporarily or pass through train_model
+    config_with_focal = args.config.replace('.json', '_with_focal.json')
+    with open(config_with_focal, 'w') as f:
+        json.dump(config, f, indent=2)
+    
     # ── Train ─────────────────────────────────────────────────────────────
     model = train_model(
-        config_path=args.config,
+        config_path=config_with_focal,  # Use modified config
         data_path=args.data,
         checkpoint_dir=args.checkpoint_dir,
         label_smoothing_override=args.label_smoothing,
@@ -198,6 +233,10 @@ def main():
         verbose=True,
         run_sanity=not args.no_sanity,
     )
+    
+    # Clean up temporary config file
+    if os.path.exists(config_with_focal):
+        os.remove(config_with_focal)
 
     with open(args.config) as f:
         config = json.load(f)

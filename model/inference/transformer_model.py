@@ -55,6 +55,80 @@ from torch.utils.data import DataLoader, Dataset
 
 
 # ---------------------------------------------------------------------------
+# Focal Loss for Handling Class Imbalance
+# ---------------------------------------------------------------------------
+
+class FocalLoss(nn.Module):
+    """
+    Focal Loss for binary classification with hard negative mining.
+    
+    FL(p) = -alpha * (1 - p)^gamma * log(p)
+    
+    Reduces the contribution of easy examples and focuses on hard negatives.
+    Useful for highly imbalanced datasets where BCE might ignore minority class.
+    
+    Args:
+        alpha (float): Weighting factor in range (0,1) for class; default 0.75
+        gamma (float): Exponent of the modulating factor (1 - p)^gamma; default 2.0
+        pos_weight (float): Weight for positive class; default 1.0
+        reduction (str): Specifies the reduction to apply: 'mean' | 'sum'; default 'mean'
+    """
+    
+    def __init__(
+        self,
+        alpha: float = 0.75,
+        gamma: float = 2.0,
+        pos_weight: float = 1.0,
+        reduction: str = 'mean',
+    ):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.pos_weight = pos_weight
+        self.reduction = reduction
+        
+        if not 0 < alpha < 1:
+            raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+        if gamma < 0:
+            raise ValueError(f"gamma must be >= 0, got {gamma}")
+    
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            logits (Tensor): raw output from model (batch_size,)
+            targets (Tensor): binary labels 0 or 1 (batch_size,)
+        
+        Returns:
+            Tensor: focal loss (scalar if reduction='mean')
+        """
+        # Compute sigmoid probabilities
+        probs = torch.sigmoid(logits)
+        
+        # Compute binary cross entropy
+        bce = -(targets * torch.log(probs + 1e-8) + (1 - targets) * torch.log(1 - probs + 1e-8))
+        
+        # Compute focal term: (1 - p_t)^gamma where p_t is prob of true class
+        p_t = targets * probs + (1 - targets) * (1 - probs)
+        focal_weight = (1.0 - p_t) ** self.gamma
+        
+        # Apply alpha weighting (higher alpha gives more weight to positive class)
+        alpha_weight = targets * self.alpha + (1 - targets) * (1 - self.alpha)
+        
+        # Apply pos_weight to balance classes
+        weight = targets * self.pos_weight + (1 - targets) * 1.0
+        
+        # Compute focal loss
+        loss = alpha_weight * focal_weight * bce * weight
+        
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss
+
+
+# ---------------------------------------------------------------------------
 # Positional Encoding
 # ---------------------------------------------------------------------------
 
@@ -289,6 +363,94 @@ def temperature_scale_logits(logits: torch.Tensor, temperature: float = 1.0) -> 
 
 
 # ---------------------------------------------------------------------------
+# Threshold Sweeping
+# ---------------------------------------------------------------------------
+
+def sweep_thresholds(
+    all_probs: np.ndarray,
+    all_labels: np.ndarray,
+    thresholds: Optional[List[float]] = None,
+    tau_min: float = 0.65,
+) -> Dict[str, any]:
+    """
+    Sweep decision thresholds and compute metrics for each.
+    
+    Args:
+        all_probs (np.ndarray): probability array (batch_size,)
+        all_labels (np.ndarray): binary labels (batch_size,)
+        thresholds (List[float]): thresholds to test; default: np.arange(0.1, 0.95, 0.05)
+        tau_min (float): tau_min for trust scoring context; not used in threshold sweep
+    
+    Returns:
+        Dict with keys:
+            - thresholds: list of tested thresholds
+            - accuracies: list of accuracies
+            - precisions: list of precisions
+            - recalls: list of recalls
+            - f1_scores: list of F1 scores
+            - best_threshold_f1: threshold with max F1
+            - best_threshold_recall: threshold with max recall
+            - best_metrics_f1: dict of metrics at best F1 threshold
+            - best_metrics_recall: dict of metrics at best recall threshold
+    """
+    if thresholds is None:
+        thresholds = list(np.arange(0.1, 0.95, 0.05))
+    
+    results = {
+        'thresholds': [],
+        'accuracies': [],
+        'precisions': [],
+        'recalls': [],
+        'f1_scores': [],
+    }
+    
+    for threshold in thresholds:
+        predictions = (all_probs > threshold).astype(np.float32)
+        
+        # Compute metrics
+        accuracy = float((predictions == all_labels).mean())
+        tp = float(((predictions == 1) & (all_labels == 1)).sum())
+        fp = float(((predictions == 1) & (all_labels == 0)).sum())
+        fn = float(((predictions == 0) & (all_labels == 1)).sum())
+        
+        precision = tp / (tp + fp + 1e-8)
+        recall = tp / (tp + fn + 1e-8)
+        f1 = 2 * precision * recall / (precision + recall + 1e-8)
+        
+        results['thresholds'].append(threshold)
+        results['accuracies'].append(accuracy)
+        results['precisions'].append(precision)
+        results['recalls'].append(recall)
+        results['f1_scores'].append(f1)
+    
+    # Find best thresholds
+    best_f1_idx = int(np.argmax(results['f1_scores']))
+    best_recall_idx = int(np.argmax(results['recalls']))
+    
+    best_threshold_f1 = results['thresholds'][best_f1_idx]
+    best_threshold_recall = results['thresholds'][best_recall_idx]
+    
+    results['best_threshold_f1'] = best_threshold_f1
+    results['best_threshold_recall'] = best_threshold_recall
+    results['best_metrics_f1'] = {
+        'threshold': best_threshold_f1,
+        'accuracy': results['accuracies'][best_f1_idx],
+        'precision': results['precisions'][best_f1_idx],
+        'recall': results['recalls'][best_f1_idx],
+        'f1': results['f1_scores'][best_f1_idx],
+    }
+    results['best_metrics_recall'] = {
+        'threshold': best_threshold_recall,
+        'accuracy': results['accuracies'][best_recall_idx],
+        'precision': results['precisions'][best_recall_idx],
+        'recall': results['recalls'][best_recall_idx],
+        'f1': results['f1_scores'][best_recall_idx],
+    }
+    
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Seed control
 # ---------------------------------------------------------------------------
 
@@ -364,8 +526,22 @@ def evaluate(
     criterion: nn.Module,
     tau_min: float = 0.65,
     temperature: float = 1.0,
+    sweep_thresholds_flag: bool = False,
 ) -> Tuple[float, float, float, float, float, float]:
-    """Evaluate. Returns (loss, accuracy, precision, recall, ece, brier)."""
+    """Evaluate. Returns (loss, accuracy, precision, recall, ece, brier).
+    
+    Args:
+        model: TrustTransformer model
+        loader: DataLoader
+        criterion: loss function
+        tau_min: minimum trust threshold
+        temperature: temperature for logit scaling
+        sweep_thresholds_flag: if True, also returns threshold sweep results
+    
+    Returns:
+        (loss, accuracy, precision, recall, ece, brier) if sweep_thresholds_flag=False
+        (loss, accuracy, precision, recall, ece, brier, sweep_results) if sweep_thresholds_flag=True
+    """
     model.eval()
     total_loss: float = 0.0
     all_preds:  List[float] = []
@@ -422,7 +598,14 @@ def evaluate(
             weight = float(in_bin.mean())
             ece += weight * abs(prob_mean - label_mean)
 
-    return total_loss / max(len(all_labels), 1), accuracy, precision, recall, float(ece), brier
+    base_return = (total_loss / max(len(all_labels), 1), accuracy, precision, recall, float(ece), brier)
+    
+    # Optionally perform threshold sweep for optimal thresholds
+    if sweep_thresholds_flag:
+        sweep_results = sweep_thresholds(all_probs, all_labels, tau_min=tau_min)
+        return base_return + (sweep_results,)
+    
+    return base_return
 
 
 # ---------------------------------------------------------------------------
@@ -668,16 +851,36 @@ def train_model(
     # Class-imbalance-aware loss
     n_legit, n_adv, pos_weight = train_ds.class_weights()
     if verbose:
-        print(f"\nClass balance: {n_legit} legit, {n_adv} adv → "
-              f"pos_weight={pos_weight:.2f}  "
-              f"(lr={config['training']['learning_rate']}, "
-              f"dropout_effective={config['architecture']['dropout']}, "
-              f"label_smoothing={label_smoothing}, "
-              f"wd_effective={weight_decay})")
+        print(f"\n=== Class Distribution ===")
+        print(f"  Training samples: {n_legit} legitimate (valid) + {n_adv} adversarial")
+        print(f"  Adversarial ratio: {100*n_adv/(n_legit+n_adv):.1f}%")
+        print(f"  pos_weight = {pos_weight:.2f}")
+        print(f"  Learning rate: {config['training']['learning_rate']:.1e}")
+        print(f"  Dropout: {config['architecture']['dropout']}")
+        print(f"  Label smoothing: {label_smoothing}")
+        print(f"  Weight decay: {weight_decay:.1e}")
+        print()
 
-    criterion = nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor([pos_weight], dtype=torch.float32)
-    )
+    # Use Focal Loss if requested, otherwise BCE with pos_weight
+    if config.get('training', {}).get('use_focal_loss', False):
+        criterion = FocalLoss(
+            alpha=float(config.get('training', {}).get('focal_alpha', 0.75)),
+            gamma=float(config.get('training', {}).get('focal_gamma', 2.0)),
+            pos_weight=pos_weight,
+            reduction='mean',
+        )
+        if verbose:
+            print(f"  Using Focal Loss:")
+            print(f"    alpha={config.get('training', {}).get('focal_alpha', 0.75)}")
+            print(f"    gamma={config.get('training', {}).get('focal_gamma', 2.0)}")
+            print()
+    else:
+        # Standard BCE with pos_weight for class imbalance handling
+        pos_weight_tensor = torch.tensor([pos_weight], dtype=torch.float32)
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
+        if verbose:
+            print(f"  Using BCEWithLogitsLoss with pos_weight={pos_weight:.2f}")
+            print()
 
     model = TrustTransformer(config)
     if verbose:
@@ -754,18 +957,27 @@ def train_model(
                           f"(best val_acc={best_val_acc:.4f})")
                 break
 
-    # Test evaluation
+    # Test evaluation with threshold sweeping
     model.load_state_dict(
         torch.load(os.path.join(checkpoint_dir, "best_model.pt"),
                    weights_only=True)
     )
-    test_loss, test_acc, test_prec, test_rec, test_ece, test_brier = evaluate(
+    eval_result = evaluate(
         model,
         test_loader,
         criterion,
         tau_min=tau_min,
         temperature=inference_temperature,
+        sweep_thresholds_flag=True,  # Enable threshold sweeping
     )
+    
+    # Extract metrics (with or without sweep results)
+    if len(eval_result) == 7:  # With sweep results
+        test_loss, test_acc, test_prec, test_rec, test_ece, test_brier, sweep_results = eval_result
+    else:  # Without sweep results (backward compatibility)
+        test_loss, test_acc, test_prec, test_rec, test_ece, test_brier = eval_result
+        sweep_results = {}
+    
     f1 = (2 * test_prec * test_rec) / (test_prec + test_rec + 1e-8)
 
     if verbose:
@@ -780,6 +992,26 @@ def train_model(
         print(f"  ECE       : {test_ece:.4f}")
         print(f"  Brier     : {test_brier:.4f}")
         print(f"{'='*54}")
+        
+        # Print threshold sweep results
+        if sweep_results:
+            print(f"\n{'='*54}")
+            print(f"  THRESHOLD SWEEP RESULTS")
+            print(f"{'='*54}")
+            print(f"  Best threshold (F1):     {sweep_results['best_threshold_f1']:.3f}")
+            best_f1_metrics = sweep_results['best_metrics_f1']
+            print(f"    Accuracy : {best_f1_metrics['accuracy']:.4f}")
+            print(f"    Precision: {best_f1_metrics['precision']:.4f}")
+            print(f"    Recall   : {best_f1_metrics['recall']:.4f}")
+            print(f"    F1       : {best_f1_metrics['f1']:.4f}")
+            
+            print(f"\n  Best threshold (Recall): {sweep_results['best_threshold_recall']:.3f}")
+            best_rec_metrics = sweep_results['best_metrics_recall']
+            print(f"    Accuracy : {best_rec_metrics['accuracy']:.4f}")
+            print(f"    Precision: {best_rec_metrics['precision']:.4f}")
+            print(f"    Recall   : {best_rec_metrics['recall']:.4f}")
+            print(f"    F1       : {best_rec_metrics['f1']:.4f}")
+            print(f"{'='*54}")
 
     metrics_payload = {
         "best_validation": {
@@ -800,6 +1032,16 @@ def train_model(
             "ece_bins": 10,
         },
     }
+    
+    # Add threshold sweep results if available
+    if sweep_results:
+        metrics_payload["threshold_sweep"] = {
+            "best_threshold_f1": float(sweep_results['best_threshold_f1']),
+            "best_metrics_f1": sweep_results['best_metrics_f1'],
+            "best_threshold_recall": float(sweep_results['best_threshold_recall']),
+            "best_metrics_recall": sweep_results['best_metrics_recall'],
+        }
+    
     with open(os.path.join(checkpoint_dir, "evaluation_metrics.json"), "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)
 
