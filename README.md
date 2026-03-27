@@ -1,4 +1,3 @@
-```markdown
 # 🌊 Interrogator-Based Behavioral Trust Inference for IoUT
 
 <p align="center">
@@ -67,7 +66,6 @@ graph LR
     C --> D[Trust Inference]
     D --> E[Anomaly Detection]
     E --> F[Trust-Based Regulation]
-```
 
 ### 🎯 Core Innovation
 
