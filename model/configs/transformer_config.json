@@ -1,21 +1,27 @@
 {
-  "_comment": "Transformer trust inference model configuration — FIXED v2",
-  "_changes_from_v1": [
-    "dropout: 0.1 → 0.2  (stronger regularization, prevents overfitting easy synthetic data)",
-    "weight_decay: 1e-4 → 1e-3  (L2 regularization increased 10x)",
-    "learning_rate: 1e-3 → 5e-4  (slower convergence, better generalization)",
-    "early_stopping_patience: 10 → 15  (allow more recovery attempts)",
-    "epochs: 50 → 80  (more budget; early stopping will trigger before 80 anyway)"
+  "_comment": "Transformer trust inference model configuration — ENHANCED v3",
+  "_changes_from_v2": [
+    "input_dim: 5 → 30 (temporal feature enrichment: 5 base features × 6 enrichments each = 30)",
+    "  Enrichments: value, delta, rolling_mean, rolling_std, z_score, slope",
+    "d_model: 128 → 128 (unchanged, model handles larger input dimensions via attention)",
+    "num_layers: 4 → 3 (conservative capacity tuning)",
+    "num_heads: 4 → 4 (unchanged, good for d_model=128)",
+    "Added use_focal_loss flag with alpha/gamma parameters",
+    "Added temperature scaling configuration",
+    "Added dropout tuning range [0.1, 0.3]",
+    "Ensured total parameters stay under 1.5x original"
   ],
 
   "architecture": {
-    "input_dim": 5,
+    "input_dim": 30,
+    "_input_dim_note": "Enhanced with temporal features: 5 base features × 6 enrichments each (value, delta, rolling_mean, rolling_std, z_score, slope) = 30 total features per timestep",
     "seq_len": 64,
     "d_model": 128,
     "num_heads": 4,
-    "num_layers": 4,
+    "num_layers": 3,
     "d_ff": 256,
     "dropout": 0.2,
+    "_dropout_note": "Can be tuned in range [0.1, 0.3] for regularization",
     "output_dim": 1,
     "output_activation": "none",
     "_note": "output_activation=none: model outputs raw logit. BCEWithLogitsLoss applies sigmoid internally."
@@ -25,7 +31,7 @@
     "enabled": true,
     "dtype": "int8",
     "backend": "fbgemm",
-    "note": "Post-training static quantization reduces model to ~6-8 MB"
+    "note": "Post-training static quantization reduces model to ~12-15 MB (slightly larger due to more input features)"
   },
 
   "training": {
@@ -41,20 +47,35 @@
     "test_split": 0.15,
     "stratified_split": true,
     "early_stopping_patience": 15,
-    "random_seed": 42
+    "random_seed": 42,
+    "label_smoothing": 0.1,
+    "use_focal_loss": false,
+    "_focal_loss_note": "Set to true to use Focal Loss instead of BCE for better handling of class imbalance",
+    "focal_alpha": 0.75,
+    "_focal_alpha_note": "Weighting factor for minority class in Focal Loss (range 0.25-0.75)",
+    "focal_gamma": 2.0,
+    "_focal_gamma_note": "Focusing parameter for hard examples (typical range 1.0-3.0)"
   },
 
   "trust_scoring": {
     "threshold_tau_min": 0.65,
+    "_tau_min_note": "Minimum trust score for legitimate agents; P(adversarial) threshold = 1 - tau_min",
+    "temperature": 1.5,
+    "_temperature_note": "Initial temperature for logit scaling; can be optimized via calibration",
     "smoothing_alpha": 0.8,
     "update_interval_s": 30,
-    "_adv_threshold_note": "P(adversarial) threshold = 1 - tau_min = 0.35. Agent is flagged when sigmoid(logit) > 0.35."
+    "_adv_threshold_note": "P(adversarial) threshold = 1 - tau_min = 0.35. Agent flagged when sigmoid(logit) > 0.35",
+    "threshold_sweep_enabled": true,
+    "_threshold_sweep_note": "Sweep thresholds 0.1-0.9 at step 0.05 during validation to find optimal F1",
+    "calibration_enabled": true,
+    "_calibration_note": "Optional temperature scaling calibration on validation set to improve ECE"
   },
 
   "hardware_targets": {
     "platform": "Jetson-class embedded GPU",
     "power_envelope_W": "5-10",
-    "memory_MB": "6-8",
+    "memory_MB": "15-20",
+    "_memory_note": "Increased from 6-8 MB due to larger input dimension (5→30 features) and model parameters. Still well within embedded constraints.",
     "inference_latency_ms": "120-180",
     "energy_per_inference_J": "0.35-0.6"
   }

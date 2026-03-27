@@ -224,6 +224,117 @@ class TrustTransformer(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Temperature Scaling Calibration
+# ---------------------------------------------------------------------------
+
+class TemperatureScaler(nn.Module):
+    """
+    Temperature scaling for calibration of confidence scores.
+    Optimizes temperature T to minimize negative log likelihood on validation set.
+    """
+    
+    def __init__(self, init_temperature: float = 1.5):
+        super().__init__()
+        self.temperature = nn.Parameter(torch.tensor(init_temperature))
+    
+    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+        """Scale logits by temperature before sigmoid."""
+        return logits / self.temperature
+    
+    def calibrate(
+        self,
+        model: 'TrustTransformer',
+        val_loader: DataLoader,
+        learning_rate: float = 0.01,
+        epochs: int = 50,
+        verbose: bool = False,
+    ) -> float:
+        """
+        Optimize temperature on validation set using NLL loss.
+        
+        Args:
+            model: TrustTransformer to calibrate
+            val_loader: Validation DataLoader
+            learning_rate: Learning rate for temperature optimization
+            epochs: Number of optimization epochs
+            verbose: Print optimization progress
+        
+        Returns:
+            Optimized temperature value
+        """
+        model.eval()
+        optimizer = torch.optim.LBFGS([self.temperature], lr=learning_rate)
+        criterion = nn.BCEWithLogitsLoss()
+        
+        def closure():
+            optimizer.zero_grad()
+            total_loss = 0.0
+            for sequences, labels in val_loader:
+                logits = model(sequences)
+                scaled_logits = self.forward(logits)
+                loss = criterion(scaled_logits, labels)
+                total_loss += loss.item() * sequences.size(0)
+            
+            avg_loss = total_loss / len(val_loader.dataset)
+            avg_loss.backward()
+            return avg_loss
+        
+        for epoch in range(epochs):
+            loss = optimizer.step(closure)
+            if verbose and epoch % 10 == 0:
+                print(f"  [calibration] Epoch {epoch}: T={self.temperature.item():.4f}, NLL={loss:.4f}")
+        
+        optimal_temp = float(self.temperature.item())
+        if verbose:
+            print(f"  [calibration] Final temperature: {optimal_temp:.4f}")
+        
+        return optimal_temp
+
+
+# ---------------------------------------------------------------------------
+# Trust-Aware Regularization
+# ---------------------------------------------------------------------------
+
+def compute_trust_variance_loss(
+    model: 'TrustTransformer',
+    loader: DataLoader,
+    temperature: float = 1.0,
+) -> torch.Tensor:
+    """
+    Compute variance of trust predictions across batch.
+    
+    Penalizes high variance in trust outputs, encouraging consistent
+    predictions. Used as auxiliary loss term.
+    
+    Args:
+        model: TrustTransformer model
+        loader: DataLoader for computing variance
+        temperature: Temperature for calibration
+    
+    Returns:
+        Scalar loss tensor (higher variance = higher loss)
+    """
+    model.eval()
+    all_trusts = []
+    
+    with torch.no_grad():
+        for sequences, _ in loader:
+            logits = model(sequences)
+            scaled_logits = logits / temperature
+            probs = torch.sigmoid(scaled_logits)
+            trusts = 1.0 - probs.squeeze()
+            all_trusts.append(trusts.cpu())
+    
+    if all_trusts:
+        all_trusts_tensor = torch.cat(all_trusts, dim=0)
+        # Return negative variance (to maximize in loss = minimize penalty)
+        # But we want to penalize high variance, so return variance
+        return torch.var(all_trusts_tensor)
+    else:
+        return torch.tensor(0.0)
+
+
+# ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
 
@@ -477,8 +588,24 @@ def train_epoch(
     tau_min: float = 0.65,
     label_smoothing: float = 0.1,
     debug:   bool  = False,
+    lambda_trust: float = 0.0,
+    trust_loader: Optional[DataLoader] = None,
+    temperature: float = 1.0,
 ) -> Tuple[float, float]:
-    """Train one epoch. Returns (mean_loss, accuracy)."""
+    """Train one epoch. Returns (mean_loss, accuracy).
+    
+    Args:
+        model: TrustTransformer model
+        loader: Training DataLoader
+        optimizer: Optimizer
+        criterion: Loss function
+        tau_min: Trust threshold
+        label_smoothing: Label smoothing factor
+        debug: Print debug info
+        lambda_trust: Weight for trust variance regularization
+        trust_loader: DataLoader for computing trust variance (can be same as loader)
+        temperature: Temperature for calibration
+    """
     model.train()
     total_loss = 0.0
     correct    = 0
@@ -490,6 +617,14 @@ def train_epoch(
         logits = model(sequences)
         smoothed_labels = smooth_binary_labels(labels, smoothing=label_smoothing)
         loss            = criterion(logits, smoothed_labels)
+        
+        # Add trust-aware regularization term
+        if lambda_trust > 0.0 and trust_loader is not None:
+            # Compute variance penalty on trust predictions
+            trust_var_loss = compute_trust_variance_loss(
+                model, trust_loader, temperature=temperature
+            )
+            loss = loss + lambda_trust * trust_var_loss
 
         if not torch.isfinite(loss):
             print(f"  [WARNING] non-finite loss at batch {batch_idx}, skipping.")
@@ -502,8 +637,8 @@ def train_epoch(
         total_loss += loss.item() * sequences.size(0)
 
         with torch.no_grad():
-            probs     = torch.sigmoid(logits.detach())
-            predicted = (probs > threshold).float()
+            probs     = torch.sigmoid(logits.detach() / temperature)
+            predicted = (probs > (1.0 - tau_min)).float()
 
         correct += (predicted == labels).sum().item()
         total   += labels.size(0)
@@ -516,6 +651,8 @@ def train_epoch(
                 print(f"  [debug] smoothed labels: {smoothed_labels.flatten()[:8].tolist()}")
             print(f"  [debug] preds:  {predicted.flatten()[:8].tolist()}")
             print(f"  [debug] loss:   {loss.item():.4f}")
+            if lambda_trust > 0.0:
+                print(f"  [debug] trust_var_loss: {trust_var_loss.item():.4f}")
 
     return total_loss / max(total, 1), correct / max(total, 1)
 
@@ -527,6 +664,7 @@ def evaluate(
     tau_min: float = 0.65,
     temperature: float = 1.0,
     sweep_thresholds_flag: bool = False,
+    custom_threshold: Optional[float] = None,
 ) -> Tuple[float, float, float, float, float, float]:
     """Evaluate. Returns (loss, accuracy, precision, recall, ece, brier).
     
@@ -534,9 +672,10 @@ def evaluate(
         model: TrustTransformer model
         loader: DataLoader
         criterion: loss function
-        tau_min: minimum trust threshold
+        tau_min: minimum trust threshold (used if custom_threshold is None)
         temperature: temperature for logit scaling
         sweep_thresholds_flag: if True, also returns threshold sweep results
+        custom_threshold: if provided, use this threshold instead of tau_min-derived threshold
     
     Returns:
         (loss, accuracy, precision, recall, ece, brier) if sweep_thresholds_flag=False
@@ -547,7 +686,9 @@ def evaluate(
     all_preds:  List[float] = []
     all_labels: List[float] = []
     all_probs:  List[float] = []
-    threshold = _adv_threshold(tau_min)
+    
+    # Use custom threshold if provided, otherwise derive from tau_min
+    threshold = custom_threshold if custom_threshold is not None else _adv_threshold(tau_min)
 
     with torch.no_grad():
         for sequences, labels in loader:
@@ -843,6 +984,27 @@ def train_model(
     val_ds   = TrustDataset(val_data,   seq_len)
     test_ds  = TrustDataset(test_data,  seq_len)
 
+    # ✓ CRITICAL: Normalize features to mean=0, std=1 per dimension
+    # Compute statistics on training set, apply to all splits
+    train_data_stacked = np.vstack([seq for seq, _ in train_ds.data])  # (n_samples*K, n_features)
+    feature_mean = train_data_stacked.mean(axis=0, keepdims=True)
+    feature_std = train_data_stacked.std(axis=0, keepdims=True)
+    feature_std = np.where(feature_std < 1e-8, 1.0, feature_std)  # Avoid division by zero
+    
+    # Apply normalization to all three datasets
+    for dataset in [train_ds, val_ds, test_ds]:
+        for i in range(len(dataset.data)):
+            seq, label = dataset.data[i]
+            seq_normalized = (seq - feature_mean) / feature_std
+            seq_normalized = np.clip(seq_normalized, -5.0, 5.0)  # Clip to prevent outliers
+            dataset.data[i] = (seq_normalized, label)
+    
+    if verbose:
+        print(f"[Normalization] Features normalized to mean=0, std=1")
+        print(f"  Feature mean (training): {feature_mean.flatten()[:5]}...")
+        print(f"  Feature std (training):  {feature_std.flatten()[:5]}...")
+        print()
+
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                               drop_last=True)
     val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False)
@@ -905,6 +1067,7 @@ def train_model(
         "ece": None,
         "brier": None,
     }
+    best_threshold_f1_val = None  # Store threshold selected on validation set
     patience_count = 0
     patience       = config["training"]["early_stopping_patience"]
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -916,13 +1079,23 @@ def train_model(
             label_smoothing=label_smoothing,
             debug=(epoch == 1 and verbose),
         )
-        val_loss, val_acc, val_prec, val_rec, val_ece, val_brier = evaluate(
+        # IMPORTANT: Sweep threshold on VALIDATION set only (prevents data leakage)
+        val_result = evaluate(
             model,
             val_loader,
             criterion,
             tau_min=tau_min,
             temperature=inference_temperature,
+            sweep_thresholds_flag=True,  # Threshold sweep ONLY on validation
         )
+        
+        # Unpack with threshold sweep results
+        val_loss, val_acc, val_prec, val_rec, val_ece, val_brier, val_sweep = val_result
+        
+        # Extract best threshold from validation sweep
+        if val_sweep and 'best_threshold_f1' in val_sweep:
+            best_threshold_f1_val = val_sweep['best_threshold_f1']
+        
         scheduler.step(val_loss)
 
         if verbose and (epoch % 5 == 0 or epoch == 1):
@@ -934,6 +1107,8 @@ def train_model(
                 f"Prec={val_prec:.4f} Rec={val_rec:.4f} "
                 f"ECE={val_ece:.4f} Brier={val_brier:.4f}"
             )
+            if best_threshold_f1_val:
+                print(f"         [Validation threshold sweep] Best F1 threshold: {best_threshold_f1_val:.3f}")
 
         if val_acc > best_val_acc:
             best_val_acc   = val_acc
@@ -957,68 +1132,55 @@ def train_model(
                           f"(best val_acc={best_val_acc:.4f})")
                 break
 
-    # Test evaluation with threshold sweeping
+    # Test evaluation: Apply NO threshold sweep (prevents data leakage)
+    # Use the best_threshold_f1 selected on validation set
     model.load_state_dict(
         torch.load(os.path.join(checkpoint_dir, "best_model.pt"),
                    weights_only=True)
     )
+    
+    # Evaluate test set with FIXED threshold from validation (no sweep on test)
     eval_result = evaluate(
         model,
         test_loader,
         criterion,
         tau_min=tau_min,
         temperature=inference_temperature,
-        sweep_thresholds_flag=True,  # Enable threshold sweeping
+        custom_threshold=best_threshold_f1_val,  # Apply validation-selected threshold
+        sweep_thresholds_flag=False,  # NO sweep on test set (data leakage prevention)
     )
     
-    # Extract metrics (with or without sweep results)
-    if len(eval_result) == 7:  # With sweep results
-        test_loss, test_acc, test_prec, test_rec, test_ece, test_brier, sweep_results = eval_result
-    else:  # Without sweep results (backward compatibility)
-        test_loss, test_acc, test_prec, test_rec, test_ece, test_brier = eval_result
-        sweep_results = {}
+    # Unpack test results (no sweep results from test)
+    test_loss, test_acc, test_prec, test_rec, test_ece, test_brier = eval_result
+    test_sweep_results = {}  # No sweep on test set
     
     f1 = (2 * test_prec * test_rec) / (test_prec + test_rec + 1e-8)
 
     if verbose:
-        print(f"\n{'='*54}")
-        print(f"  TEST RESULTS  (tau_min={tau_min}, "
-              f"P(adv) thr={_adv_threshold(tau_min):.2f})")
-        print(f"{'='*54}")
+        print(f"\n{'='*60}")
+        print(f"  TEST RESULTS (Using threshold from validation set)")
+        print(f"{'='*60}")
+        print(f"  Threshold applied: {best_threshold_f1_val:.3f} (selected on validation)")
+        print(f"  {'-'*60}")
         print(f"  Accuracy  : {test_acc:.4f}  ({test_acc*100:.1f}%)")
         print(f"  Precision : {test_prec:.4f}")
         print(f"  Recall    : {test_rec:.4f}")
         print(f"  F1        : {f1:.4f}")
         print(f"  ECE       : {test_ece:.4f}")
         print(f"  Brier     : {test_brier:.4f}")
-        print(f"{'='*54}")
-        
-        # Print threshold sweep results
-        if sweep_results:
-            print(f"\n{'='*54}")
-            print(f"  THRESHOLD SWEEP RESULTS")
-            print(f"{'='*54}")
-            print(f"  Best threshold (F1):     {sweep_results['best_threshold_f1']:.3f}")
-            best_f1_metrics = sweep_results['best_metrics_f1']
-            print(f"    Accuracy : {best_f1_metrics['accuracy']:.4f}")
-            print(f"    Precision: {best_f1_metrics['precision']:.4f}")
-            print(f"    Recall   : {best_f1_metrics['recall']:.4f}")
-            print(f"    F1       : {best_f1_metrics['f1']:.4f}")
-            
-            print(f"\n  Best threshold (Recall): {sweep_results['best_threshold_recall']:.3f}")
-            best_rec_metrics = sweep_results['best_metrics_recall']
-            print(f"    Accuracy : {best_rec_metrics['accuracy']:.4f}")
-            print(f"    Precision: {best_rec_metrics['precision']:.4f}")
-            print(f"    Recall   : {best_rec_metrics['recall']:.4f}")
-            print(f"    F1       : {best_rec_metrics['f1']:.4f}")
-            print(f"{'='*54}")
+        print(f"{'='*60}")
 
     metrics_payload = {
+        "metadata": {
+            "approach": "Threshold sweep on validation set, applied to test set",
+            "note": "Prevents data leakage: threshold selected on validation ONLY"
+        },
         "best_validation": {
             "epoch": int(best_val_epoch),
             **best_val_metrics,
         },
         "test": {
+            "threshold_used": float(best_threshold_f1_val) if best_threshold_f1_val else float(_adv_threshold(tau_min)),
             "loss": float(test_loss),
             "accuracy": float(test_acc),
             "precision": float(test_prec),
@@ -1032,15 +1194,6 @@ def train_model(
             "ece_bins": 10,
         },
     }
-    
-    # Add threshold sweep results if available
-    if sweep_results:
-        metrics_payload["threshold_sweep"] = {
-            "best_threshold_f1": float(sweep_results['best_threshold_f1']),
-            "best_metrics_f1": sweep_results['best_metrics_f1'],
-            "best_threshold_recall": float(sweep_results['best_threshold_recall']),
-            "best_metrics_recall": sweep_results['best_metrics_recall'],
-        }
     
     with open(os.path.join(checkpoint_dir, "evaluation_metrics.json"), "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)
