@@ -482,7 +482,7 @@ See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for full guidelines.
 |---------|------|
 | **Bug Reports** | [Open an Issue](https://github.com/aliakarma/IoUT-Interrogator-Framework/issues/new) |
 | **Discussions** | [GitHub Discussions](https://github.com/aliakarma/IoUT-Interrogator-Framework/discussions) |
-| **Email** | ali.akarma@institution.edu |
+| **Email** | 443059463@stu.iu.edu.sa |
 
 ---
 
@@ -518,7 +518,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 | **Repository** | [IoUT-Interrogator-Framework](https://github.com/aliakarma/IoUT-Interrogator-Framework) |
 | **License** | MIT |
 | **Archival** | GitHub + Zenodo (DOI pending) |
-| **Correspondence** | ali.akarma@institution.edu |
+| **Correspondence** | 443059463@stu.iu.edu.sa |
 
 ---
 
