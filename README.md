@@ -1,13 +1,27 @@
 # 🌊 Interrogator-Based Behavioral Trust Inference for IoUT
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
-  <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white&style=for-the-badge" alt="PyTorch">
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/badge/Paper-Under%20Review-orange?style=for-the-badge" alt="Paper Status">
-  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab">
-  <img src="https://img.shields.io/badge/DOI-Dataset-blue?style=for-the-badge" alt="DOI">
-  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker">
+  <a href="https://www.python.org/">
+    <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white&style=for-the-badge">
+  </a>
+  <a href="https://pytorch.org/">
+    <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white&style=for-the-badge">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge">
+  </a>
+  <a href="#">
+    <img src="https://img.shields.io/badge/Paper-Under%20Review-orange?style=for-the-badge">
+  </a>
+  <a href="https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb">
+    <img src="https://colab.research.google.com/assets/colab-badge.svg">
+  </a>
+  <a href="#">
+    <img src="https://img.shields.io/badge/DOI-Coming%20Soon-blue?style=for-the-badge">
+  </a>
+  <a href="#">
+    <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white&style=for-the-badge">
+  </a>
 </p>
 
 <p align="center">
@@ -15,56 +29,41 @@
 </p>
 
 <p align="center">
-  <a href="#-overview">Overview</a> •
-  <a href="#-key-features">Features</a> •
-  <a href="#-getting-started">Quick Start</a> •
-  <a href="#-interactive-notebooks">Notebooks</a> •
-  <a href="#-citation">Citation</a>
+  <a href="#overview">Overview</a> •
+  <a href="#key-features">Features</a> •
+  <a href="#getting-started">Quick Start</a> •
+  <a href="#notebooks">Notebooks</a> •
+  <a href="#citation">Citation</a>
 </p>
 
 ---
 
-## 📋 Interactive Table of Contents
+## 📋 Table of Contents
 
-<details open>
-<summary><strong>🔍 Click to expand/collapse sections</strong></summary>
-
-- [🔬 Overview](#-overview)
-- [⚠️ Scope and Research Positioning](#️-scope-and-research-positioning)
-- [✨ Key Features](#-key-features)
-- [📈 Reproducible Results](#-reproducible-results)
-- [🚀 Getting Started in 3 Steps](#-getting-started-in-3-steps)
-- [📚 Interactive Notebooks](#-interactive-notebooks)
-- [🗂️ Repository Structure](#️-repository-structure)
-- [🖥️ Environment Setup](#️-environment-setup)
-- [📋 Supplementary Materials](#-supplementary-materials)
-- [📚 Artifact Availability](#-artifact-availability)
-- [📖 Citation](#-citation)
-- [📄 License](#-license)
-- [🤝 Reproducibility Commitment](#-reproducibility-commitment)
-- [🤝 Contributing](#-contributing)
-- [📬 Support & Contact](#-support--contact)
-
-</details>
+- [Overview](#overview)
+- [Scope](#scope)
+- [Key Features](#key-features)
+- [Results](#results)
+- [Getting Started](#getting-started)
+- [Notebooks](#notebooks)
+- [Repository Structure](#repository-structure)
+- [Environment Setup](#environment-setup)
+- [Citation](#citation)
+- [License](#license)
+- [Contributing](#contributing)
 
 ---
 
 ## 🔬 Overview
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Research-Grade-00A8E8?style=flat-square" alt="Research Grade">
-  <img src="https://img.shields.io/badge/Reproducible-✅-4CAF50?style=flat-square" alt="Reproducible">
-  <img src="https://img.shields.io/badge/Open-Source-FF6B6B?style=flat-square" alt="Open Source">
-</p>
-
-This repository provides a **research-grade, reproducible implementation** of an interrogator-based behavioral trust framework for autonomous **Internet of Underwater Things (IoUT)** environments.
-
+```mermaid
 graph LR
     A[Agent Behavior] --> B[Metadata Collection]
     B --> C[Transformer Model]
     C --> D[Trust Inference]
     D --> E[Anomaly Detection]
     E --> F[Trust-Based Regulation]
+```
 
 ### 🎯 Core Innovation
 
