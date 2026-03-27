@@ -30,7 +30,7 @@ Estimated runtime (CPU, 30 runs): **15–25 minutes**.
 
 ```bash
 # Clone the repository
-git clone https://github.com/[username]/IoUT-Interrogator-Framework.git
+git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
 cd IoUT-Interrogator-Framework
 
 # Create and activate a virtual environment (recommended)
