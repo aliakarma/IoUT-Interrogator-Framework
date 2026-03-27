@@ -4,7 +4,7 @@
 [![PyTorch 2.x](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Paper Status](https://img.shields.io/badge/Paper-Under%20Review-orange)]()
-[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](#-📚-interactive-notebooks)
+[![Colab Notebooks](https://colab.research.google.com/assets/colab-badge.svg)](#interactive-notebooks)
 [![DOI](https://img.shields.io/badge/DOI-Dataset-blue)]()
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
 
@@ -129,16 +129,16 @@ python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
 
 ---
 
-## 📚 Interactive Notebooks
+## 📚 Interactive Notebooks {#interactive-notebooks}
 
 All notebooks are fully compatible with Google Colab for cloud-based execution:
 
 | Notebook | Description | Colab Link |
 | -------- | ----------- | ---------- |
-| **01_trust_inference_demo.ipynb** [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb) | Model training, inference, and trust scoring visualization | [Open in Colab](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb) |
-| **02_simulation_analysis.ipynb** [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/02_simulation_analysis.ipynb) | Performance metrics, comparisons with baselines, statistical analysis | [Open in Colab](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/02_simulation_analysis.ipynb) |
-| **03_blockchain_demo.ipynb** [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/03_blockchain_demo.ipynb) | Conceptual trust governance and blockchain integration flow | [Open in Colab](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/03_blockchain_demo.ipynb) |
-| **04_ablation_study.ipynb** [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/04_ablation_study.ipynb) | Component sensitivity, parameter tuning, and ablation analysis | [Open in Colab](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/04_ablation_study.ipynb) |
+| 01_trust_inference_demo.ipynb | Model training, inference, and trust scoring visualization | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/01_trust_inference_demo.ipynb) |
+| 02_simulation_analysis.ipynb | Performance metrics, comparisons with baselines, statistical analysis | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/02_simulation_analysis.ipynb) |
+| 03_blockchain_demo.ipynb | Conceptual trust governance and blockchain integration flow | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/03_blockchain_demo.ipynb) |
+| 04_ablation_study.ipynb | Component sensitivity, parameter tuning, and ablation analysis | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/04_ablation_study.ipynb) |
 
 ---
 
