@@ -71,7 +71,7 @@ AR_PHI = 0.4
 ENABLE_TEMPORAL_FEATURES = True
 
 
-def _compute_temporal_features(seq: np.ndarray, window: int = 3, normalize: bool = True) -> np.ndarray:
+def _compute_temporal_features(seq: np.ndarray, window: int = 3) -> np.ndarray:
     """
     Compute temporal enrichment features and append to sequence.
     
@@ -83,16 +83,12 @@ def _compute_temporal_features(seq: np.ndarray, window: int = 3, normalize: bool
       5. z_score: (value - global_mean) / global_std
       6. slope: linear trend over last k steps
     
-    All enriched features are normalized to mean=0, std=1 to prevent feature explosion.
-    
     Args:
         seq (np.ndarray): Base sequence of shape (K, N_base) where K=seq_len, N_base=5
         window (int): Rolling window size for mean/std/slope
-        normalize (bool): Whether to apply z-score normalization to enriched features
     
     Returns:
         np.ndarray: Enriched sequence of shape (K, N_base * 6) with 6 values per feature
-                   (normalized if normalize=True)
     """
     if not ENABLE_TEMPORAL_FEATURES:
         return seq
@@ -149,15 +145,6 @@ def _compute_temporal_features(seq: np.ndarray, window: int = 3, normalize: bool
                 np.clip(slope_t, -1.0, 1.0),
             ], dtype=np.float32)
             feat_idx_out += 6
-    
-    # ✓ CRITICAL: Normalize enriched features to mean=0, std=1 per dimension
-    # This prevents feature explosion and ensures numerical stability
-    if normalize:
-        enriched_mean = enriched.mean(axis=0, keepdims=True)
-        enriched_std = enriched.std(axis=0, keepdims=True)
-        enriched_std = np.where(enriched_std < 1e-8, 1.0, enriched_std)
-        enriched = (enriched - enriched_mean) / enriched_std
-        enriched = np.clip(enriched, -5.0, 5.0)  # Clip to prevent outliers
     
     return enriched
 

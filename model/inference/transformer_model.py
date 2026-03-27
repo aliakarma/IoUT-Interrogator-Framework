@@ -489,7 +489,7 @@ def sweep_thresholds(
     Args:
         all_probs (np.ndarray): probability array (batch_size,)
         all_labels (np.ndarray): binary labels (batch_size,)
-        thresholds (List[float]): thresholds to test; default: np.arange(0.1, 0.95, 0.05)
+        thresholds (List[float]): thresholds to test; default: np.arange(0.3, 0.95, 0.05)
         tau_min (float): tau_min for trust scoring context; not used in threshold sweep
     
     Returns:
@@ -499,13 +499,15 @@ def sweep_thresholds(
             - precisions: list of precisions
             - recalls: list of recalls
             - f1_scores: list of F1 scores
-            - best_threshold_f1: threshold with max F1
+            - best_threshold_f1: threshold with max F1 under precision >= 0.3
             - best_threshold_recall: threshold with max recall
             - best_metrics_f1: dict of metrics at best F1 threshold
             - best_metrics_recall: dict of metrics at best recall threshold
     """
     if thresholds is None:
-        thresholds = list(np.arange(0.1, 0.95, 0.05))
+        thresholds = list(np.arange(0.3, 0.95, 0.05))
+
+    min_precision = 0.3
     
     results = {
         'thresholds': [],
@@ -534,15 +536,27 @@ def sweep_thresholds(
         results['recalls'].append(recall)
         results['f1_scores'].append(f1)
     
-    # Find best thresholds
-    best_f1_idx = int(np.argmax(results['f1_scores']))
-    best_recall_idx = int(np.argmax(results['recalls']))
+    # Find best thresholds with precision constraint to avoid degenerate selections.
+    valid_indices = [
+        i for i, precision in enumerate(results['precisions'])
+        if precision >= min_precision
+    ]
+
+    if valid_indices:
+        best_f1_idx = max(valid_indices, key=lambda i: results['f1_scores'][i])
+        best_recall_idx = max(valid_indices, key=lambda i: results['recalls'][i])
+    else:
+        # Fallback keeps training/evaluation robust if all thresholds violate the constraint.
+        best_f1_idx = int(np.argmax(results['f1_scores']))
+        best_recall_idx = int(np.argmax(results['recalls']))
     
     best_threshold_f1 = results['thresholds'][best_f1_idx]
     best_threshold_recall = results['thresholds'][best_recall_idx]
     
     results['best_threshold_f1'] = best_threshold_f1
     results['best_threshold_recall'] = best_threshold_recall
+    results['precision_constraint_min'] = float(min_precision)
+    results['valid_threshold_count'] = int(len(valid_indices))
     results['best_metrics_f1'] = {
         'threshold': best_threshold_f1,
         'accuracy': results['accuracies'][best_f1_idx],
@@ -665,6 +679,7 @@ def evaluate(
     temperature: float = 1.0,
     sweep_thresholds_flag: bool = False,
     custom_threshold: Optional[float] = None,
+    return_diagnostics: bool = False,
 ) -> Tuple[float, float, float, float, float, float]:
     """Evaluate. Returns (loss, accuracy, precision, recall, ece, brier).
     
@@ -676,6 +691,7 @@ def evaluate(
         temperature: temperature for logit scaling
         sweep_thresholds_flag: if True, also returns threshold sweep results
         custom_threshold: if provided, use this threshold instead of tau_min-derived threshold
+        return_diagnostics: if True, append prediction distribution diagnostics
     
     Returns:
         (loss, accuracy, precision, recall, ece, brier) if sweep_thresholds_flag=False
@@ -714,6 +730,18 @@ def evaluate(
     precision = tp / (tp + fp + 1e-8)
     recall    = tp / (tp + fn + 1e-8)
 
+    # Prediction diagnostics to detect collapse (all-positive / all-negative)
+    fraction_predicted_positive = float((all_preds == 1).mean()) if len(all_preds) else 0.0
+    fraction_predicted_negative = float((all_preds == 0).mean()) if len(all_preds) else 0.0
+
+    # Print diagnostics after inference-style evaluation (fixed-threshold, non-sweep).
+    if custom_threshold is not None and not sweep_thresholds_flag:
+        print(f"Predicted positive rate: {fraction_predicted_positive * 100:.1f}%")
+        print(f"Predicted negative rate: {fraction_predicted_negative * 100:.1f}%")
+        if fraction_predicted_positive > 0.90 or fraction_predicted_positive < 0.10:
+            print("[WARNING] Prediction collapse detected: predicted positive rate is extreme "
+                  "(>90% or <10%).")
+
     # Calibration metrics on adversarial probability p_adv.
     # Brier score: mean squared error between probability and binary label.
     brier = float(np.mean((all_probs - all_labels) ** 2)) if len(all_labels) else 0.0
@@ -745,6 +773,13 @@ def evaluate(
     if sweep_thresholds_flag:
         sweep_results = sweep_thresholds(all_probs, all_labels, tau_min=tau_min)
         return base_return + (sweep_results,)
+
+    if return_diagnostics:
+        diagnostics = {
+            "fraction_predicted_positive": float(fraction_predicted_positive),
+            "fraction_predicted_negative": float(fraction_predicted_negative),
+        }
+        return base_return + (diagnostics,)
     
     return base_return
 
@@ -984,14 +1019,16 @@ def train_model(
     val_ds   = TrustDataset(val_data,   seq_len)
     test_ds  = TrustDataset(test_data,  seq_len)
 
-    # ✓ CRITICAL: Normalize features to mean=0, std=1 per dimension
-    # Compute statistics on training set, apply to all splits
+    # ✓ CRITICAL: Normalize features with TRAINING statistics only
     train_data_stacked = np.vstack([seq for seq, _ in train_ds.data])  # (n_samples*K, n_features)
     feature_mean = train_data_stacked.mean(axis=0, keepdims=True)
-    feature_std = train_data_stacked.std(axis=0, keepdims=True)
-    feature_std = np.where(feature_std < 1e-8, 1.0, feature_std)  # Avoid division by zero
-    
-    # Apply normalization to all three datasets
+    feature_std_raw = train_data_stacked.std(axis=0, keepdims=True)
+
+    # Variance guard: avoid division explosion for near-constant features
+    near_zero_mask = feature_std_raw < 1e-6
+    feature_std = np.where(near_zero_mask, 1.0, feature_std_raw)
+
+    # Apply normalization to train/val/test using the SAME training stats
     for dataset in [train_ds, val_ds, test_ds]:
         for i in range(len(dataset.data)):
             seq, label = dataset.data[i]
@@ -1000,10 +1037,53 @@ def train_model(
             dataset.data[i] = (seq_normalized, label)
     
     if verbose:
-        print(f"[Normalization] Features normalized to mean=0, std=1")
+        n_features = int(feature_std_raw.shape[1])
+        near_zero_count = int(near_zero_mask.sum())
+        near_zero_ratio = near_zero_count / max(n_features, 1)
+
+        print(f"[Normalization] Features normalized to mean=0, std=1 (training-set stats)")
         print(f"  Feature mean (training): {feature_mean.flatten()[:5]}...")
-        print(f"  Feature std (training):  {feature_std.flatten()[:5]}...")
+        print(f"  Feature std before guard (training): {feature_std_raw.flatten()[:5]}...")
+        print(f"  Near-zero std features (<1e-6): {near_zero_count}/{n_features}")
+        if near_zero_ratio >= 0.2:
+            print("  [WARNING] High fraction of near-zero-variance features detected; "
+                  "check feature generation and class separability.")
         print()
+
+    # Feature separability diagnostics (training split only)
+    if verbose:
+        train_flat = np.vstack([seq for seq, _ in train_ds.data])
+        train_labels = np.concatenate([
+            np.full(seq.shape[0], label, dtype=np.float32)
+            for seq, label in train_ds.data
+        ])
+
+        legit_mask = train_labels == 0.0
+        adv_mask = train_labels == 1.0
+
+        if legit_mask.any() and adv_mask.any():
+            mean_legit = train_flat[legit_mask].mean(axis=0)
+            mean_adv = train_flat[adv_mask].mean(axis=0)
+            separation = np.abs(mean_legit - mean_adv)
+
+            avg_sep = float(separation.mean())
+            topk = min(10, separation.shape[0])
+            top_idx = np.argsort(separation)[::-1][:topk]
+
+            print("[Separability] Training feature separability diagnostics")
+            print("  Top 10 features by |mean_legit - mean_adv|:")
+            for rank, feat_idx in enumerate(top_idx, start=1):
+                print(
+                    f"    {rank:2d}. feature[{feat_idx:02d}] "
+                    f"mean_legit={mean_legit[feat_idx]:+.6f} "
+                    f"mean_adv={mean_adv[feat_idx]:+.6f} "
+                    f"sep={separation[feat_idx]:.6f}"
+                )
+            print(f"  Average separation across features: {avg_sep:.6f}")
+            if avg_sep < 0.01:
+                print("  [WARNING] Average feature separation < 0.01; "
+                      "class separability may be too weak for stable training.")
+            print()
 
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
                               drop_last=True)
@@ -1148,10 +1228,11 @@ def train_model(
         temperature=inference_temperature,
         custom_threshold=best_threshold_f1_val,  # Apply validation-selected threshold
         sweep_thresholds_flag=False,  # NO sweep on test set (data leakage prevention)
+        return_diagnostics=True,
     )
     
     # Unpack test results (no sweep results from test)
-    test_loss, test_acc, test_prec, test_rec, test_ece, test_brier = eval_result
+    test_loss, test_acc, test_prec, test_rec, test_ece, test_brier, test_diagnostics = eval_result
     test_sweep_results = {}  # No sweep on test set
     
     f1 = (2 * test_prec * test_rec) / (test_prec + test_rec + 1e-8)
@@ -1188,6 +1269,10 @@ def train_model(
             "f1": float(f1),
             "ece": float(test_ece),
             "brier": float(test_brier),
+        },
+        "test_diagnostics": {
+            "fraction_predicted_positive": float(test_diagnostics.get("fraction_predicted_positive", 0.0)),
+            "fraction_predicted_negative": float(test_diagnostics.get("fraction_predicted_negative", 0.0)),
         },
         "calibration": {
             "temperature": float(inference_temperature),

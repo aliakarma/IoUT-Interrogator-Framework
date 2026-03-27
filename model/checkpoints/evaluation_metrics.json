@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "approach": "Threshold sweep on validation set, applied to test set",
+    "note": "Prevents data leakage: threshold selected on validation ONLY"
+  },
+  "best_validation": {
+    "epoch": 3,
+    "loss": 0.19347671640885844,
+    "accuracy": 1.0,
+    "precision": 0.999999999090909,
+    "recall": 0.999999999090909,
+    "ece": 0.24353966882099976,
+    "brier": 0.06776727735996246
+  },
+  "test": {
+    "threshold_used": 0.3,
+    "loss": 0.2717465425466562,
+    "accuracy": 0.922077922077922,
+    "precision": 0.6666666662962962,
+    "recall": 0.9999999991666666,
+    "f1": 0.7999999946666667,
+    "ece": 0.2556361072249227,
+    "brier": 0.0716637372970581
+  },
+  "test_diagnostics": {
+    "fraction_predicted_positive": 0.23376623376623376,
+    "fraction_predicted_negative": 0.7662337662337663
+  },
+  "calibration": {
+    "temperature": 1.5,
+    "ece_bins": 10
+  }
+}
