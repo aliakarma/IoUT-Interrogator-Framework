@@ -1,19 +1,56 @@
-Metric,Mean,Std,Min,Max
-Detection Accuracy — Proposed (%),90.2,1.0,86.0,94.0
-Detection Accuracy — Bayesian (%),57.0,4.6,14.0,74.0
-Detection Accuracy — Static (%),86.0,0.0,86.0,86.0
-Precision — Proposed (%),63.33,13.33,0.0,100.0
-Precision — Bayesian (%),25.17,3.27,14.0,31.74
-Precision — Static (%),0.0,0.0,0.0,0.0
-Recall — Proposed (%),35.71,7.14,0.0,64.28
-Recall — Bayesian (%),77.14,5.71,64.28,100.0
-Recall — Static (%),0.0,0.0,0.0,0.0
-F1 Score — Proposed (%),43.03,7.29,0.0,74.82
-F1 Score — Bayesian (%),36.35,3.1,24.56,43.81
-F1 Score — Static (%),0.0,0.0,0.0,0.0
-Packet Delivery Ratio — Proposed (%),92.5,2.61,90.81,94.94
-Packet Delivery Ratio — Bayesian (%),91.82,1.29,88.62,94.79
-Packet Delivery Ratio — Static (%),91.23,2.54,88.81,93.75
-Residual Energy — Proposed (%),92.58,0.01,87.64,97.54
-Residual Energy — Bayesian (%),92.56,0.01,87.6,97.54
-Residual Energy — Static (%),92.95,0.03,88.26,97.64
+metric_name,n,mean,std,ci95_lower,ci95_upper
+accuracy_bayesian,10,57.2,24.27985,42.195,70.0
+accuracy_proposed,10,85.6,1.264911,84.8,86.0
+accuracy_static,10,86.0,0.0,86.0,86.0
+blockchain_commit_latency_ms,10,1499.22642,2.639562,1497.61971,1500.677399
+blockchain_commit_success_rate,10,1.0,0.0,1.0,1.0
+blockchain_failed_commits,10,0.0,0.0,0.0,0.0
+communication_distance_bayesian,10,531.726614,26.809623,514.511611,547.113835
+communication_distance_proposed,10,521.070754,22.255289,507.864262,534.608646
+communication_distance_static,10,510.221247,32.762037,489.828317,529.377183
+compute_cost_bayesian,10,1.1,0.0,1.1,1.1
+compute_cost_proposed,10,1.12,0.0,1.12,1.12
+compute_cost_static,10,0.95,0.0,0.95,0.95
+energy_bayesian,10,91.946,4.021261,89.781925,94.372025
+energy_proposed,10,91.812,4.076496,89.617,94.270025
+energy_static,10,92.32,3.822262,90.263,94.625
+f1_bayesian,10,36.814,8.082639,32.068475,41.37675
+f1_proposed,10,2.222,7.026581,0.0,6.666
+f1_static,10,0.0,0.0,0.0,0.0
+fn_bayesian,10,1.5,1.080123,0.8,2.1
+fn_proposed,10,6.9,0.316228,6.7,7.0
+fn_static,10,7.0,0.0,7.0,7.0
+fp_bayesian,10,19.9,13.076272,12.9,27.905
+fp_proposed,10,0.3,0.674949,0.0,0.7
+fp_static,10,0.0,0.0,0.0,0.0
+packet_count_bayesian,10,1.250833,0.015335,1.242356,1.260453
+packet_count_proposed,10,1.269041,0.008819,1.264009,1.2744
+packet_count_static,10,1.23804,0.010532,1.231861,1.244486
+pdr_bayesian,10,83.454,5.789278,79.993225,86.931125
+pdr_proposed,10,91.898,3.7843,89.696,94.0742
+pdr_static,10,91.228,3.902492,88.7676,93.3944
+precision_bayesian,10,25.39,8.352098,20.627775,30.272625
+precision_proposed,10,5.0,15.811388,0.0,15.0
+precision_static,10,0.0,0.0,0.0,0.0
+recall_bayesian,10,78.57,15.430335,69.999,88.57
+recall_proposed,10,1.429,4.518895,0.0,4.287
+recall_static,10,0.0,0.0,0.0,0.0
+routing_distance_bayesian,10,498.36749,46.766236,473.592538,528.576661
+routing_distance_proposed,10,166.572381,284.588922,0.0,353.770339
+routing_distance_static,10,0.0,0.0,0.0,0.0
+routing_load_bayesian,10,0.469,0.027568,0.452,0.485
+routing_load_proposed,10,0.548,0.003496,0.5455,0.55
+routing_load_static,10,0.55,0.0,0.55,0.55
+routing_noise_bayesian,10,-0.023019,0.020657,-0.035,-0.011208
+routing_noise_proposed,10,0.000196,0.053265,-0.029888,0.038422
+routing_noise_static,10,0.0,0.0,0.0,0.0
+tn_bayesian,10,23.1,13.076272,15.095,30.1
+tn_proposed,10,42.7,0.674949,42.3,43.0
+tn_static,10,43.0,0.0,43.0,43.0
+tp_bayesian,10,5.5,1.080123,4.9,6.2
+tp_proposed,10,0.1,0.316228,0.0,0.3
+tp_static,10,0.0,0.0,0.0,0.0
+trust_max_proposed,10,0.86737,0.053988,0.838087,0.899701
+trust_mean_proposed,10,0.85429,0.054562,0.824619,0.887072
+trust_min_proposed,10,0.821,0.062206,0.786909,0.858501
+trust_std_proposed,10,0.00837,0.001382,0.00755,0.00915
