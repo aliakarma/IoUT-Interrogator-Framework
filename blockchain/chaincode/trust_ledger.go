@@ -110,7 +110,8 @@ func (c *TrustLedgerContract) SubmitTrustDelta(
 	if err != nil {
 		return fmt.Errorf("failed to get client identity")
 	}
-	_ = clientID // identity verified; used for audit trail if extended
+	// clientID is verified above; retained for future audit-trail extension.
+	_ = clientID
 
 	mspID, err := ctx.GetClientIdentity().GetMSPID()
 	if err != nil {
