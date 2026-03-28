@@ -4,7 +4,7 @@ import sys
 
 
 MIN_PYTHON = (3, 9)
-MAX_PYTHON = (3, 11)
+MAX_PYTHON = (3, 12)
 
 
 def ensure_supported_python(min_version=MIN_PYTHON, max_version=MAX_PYTHON) -> None:
