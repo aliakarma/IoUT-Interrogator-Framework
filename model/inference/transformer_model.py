@@ -51,6 +51,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -97,29 +98,28 @@ class FocalLoss(nn.Module):
         Args:
             logits (Tensor): raw output from model (batch_size,)
             targets (Tensor): binary labels 0 or 1 (batch_size,)
-        
+
         Returns:
             Tensor: focal loss (scalar if reduction='mean')
         """
-        # Compute sigmoid probabilities
-        probs = torch.sigmoid(logits)
-        
-        # Compute binary cross entropy
-        bce = -(targets * torch.log(probs + 1e-8) + (1 - targets) * torch.log(1 - probs + 1e-8))
-        
-        # Compute focal term: (1 - p_t)^gamma where p_t is prob of true class
-        p_t = targets * probs + (1 - targets) * (1 - probs)
+        # Numerically stable BCE via PyTorch built-in (avoids manual log(sigmoid))
+        bce = F.binary_cross_entropy_with_logits(
+            logits, targets, reduction='none'
+        )
+
+        # Focal modulation: down-weight easy examples
+        p_t = torch.exp(-bce)
         focal_weight = (1.0 - p_t) ** self.gamma
-        
+
         # Apply alpha weighting (higher alpha gives more weight to positive class)
         alpha_weight = targets * self.alpha + (1 - targets) * (1 - self.alpha)
-        
+
         # Apply pos_weight to balance classes
         weight = targets * self.pos_weight + (1 - targets) * 1.0
-        
+
         # Compute focal loss
         loss = alpha_weight * focal_weight * bce * weight
-        
+
         if self.reduction == 'mean':
             return loss.mean()
         elif self.reduction == 'sum':
@@ -505,7 +505,7 @@ def sweep_thresholds(
             - best_metrics_recall: dict of metrics at best recall threshold
     """
     if thresholds is None:
-        thresholds = list(np.arange(0.3, 0.95, 0.05))
+        thresholds = list(np.arange(0.3, 0.91, 0.05))
 
     min_precision = 0.3
     
@@ -542,13 +542,14 @@ def sweep_thresholds(
         if precision >= min_precision
     ]
 
-    if valid_indices:
-        best_f1_idx = max(valid_indices, key=lambda i: results['f1_scores'][i])
-        best_recall_idx = max(valid_indices, key=lambda i: results['recalls'][i])
-    else:
-        # Fallback keeps training/evaluation robust if all thresholds violate the constraint.
-        best_f1_idx = int(np.argmax(results['f1_scores']))
-        best_recall_idx = int(np.argmax(results['recalls']))
+    if len(valid_indices) == 0:
+        raise RuntimeWarning(
+            "Model collapse detected: no threshold satisfies precision constraint. "
+            "Check model outputs and training convergence."
+        )
+
+    best_f1_idx = max(valid_indices, key=lambda i: results['f1_scores'][i])
+    best_recall_idx = max(valid_indices, key=lambda i: results['recalls'][i])
     
     best_threshold_f1 = results['thresholds'][best_f1_idx]
     best_threshold_recall = results['thresholds'][best_recall_idx]
@@ -1033,7 +1034,6 @@ def train_model(
         for i in range(len(dataset.data)):
             seq, label = dataset.data[i]
             seq_normalized = (seq - feature_mean) / feature_std
-            seq_normalized = np.clip(seq_normalized, -5.0, 5.0)  # Clip to prevent outliers
             dataset.data[i] = (seq_normalized, label)
     
     if verbose:

@@ -96,7 +96,8 @@ def run_single_simulation(config_path: str, seed: int,
 
         # Validate model forward path once and fallback if quantized runtime is incompatible.
         try:
-            _dummy = np.zeros((sequence_len, 5), dtype=np.float32)
+            _n_features = int(model_cfg["architecture"]["input_dim"])
+            _dummy = np.zeros((sequence_len, _n_features), dtype=np.float32)
             _ = compute_trust_score(model, _dummy, temperature=temperature)
         except Exception:
             if quantized:
