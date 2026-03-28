@@ -5,26 +5,26 @@
   },
   "best_validation": {
     "epoch": 2,
-    "loss": 0.19665296738212173,
+    "loss": 0.21279083695766088,
     "accuracy": 1.0,
     "precision": 0.999999999090909,
     "recall": 0.999999999090909,
-    "ece": 0.24534619941904742,
-    "brier": 0.06998901814222336
+    "ece": 0.2042460993335054,
+    "brier": 0.048705149441957474
   },
   "test": {
     "threshold_used": 0.35,
-    "loss": 0.2589955836921543,
-    "accuracy": 1.0,
-    "precision": 0.9999999991666666,
-    "recall": 0.9999999991666666,
-    "f1": 0.9999999941666666,
-    "ece": 0.2563189670637056,
-    "brier": 0.07292693108320236
+    "loss": 0.48511925223585844,
+    "accuracy": 0.987012987012987,
+    "precision": 0.999999999090909,
+    "recall": 0.9166666659027777,
+    "f1": 0.9565217333081286,
+    "ece": 0.18886772642371719,
+    "brier": 0.05946934223175049
   },
   "test_diagnostics": {
-    "fraction_predicted_positive": 0.15584415584415584,
-    "fraction_predicted_negative": 0.8441558441558441
+    "fraction_predicted_positive": 0.14285714285714285,
+    "fraction_predicted_negative": 0.8571428571428571
   },
   "calibration": {
     "temperature": 1.5,
