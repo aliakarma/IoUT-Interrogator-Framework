@@ -226,7 +226,13 @@ def _apply_burst_packet_loss(
     A two-state Markov chain models correlated packet loss:
       - Normal state  → burst state  with probability burst_loss_prob
       - Burst state   → normal state with probability burst_recovery_prob
-    During a burst, the step value is zeroed (packet lost).
+
+    During a burst, the entire feature vector for that timestep is zeroed.
+    This models the common IoUT scenario where a dropped packet provides
+    no observable measurements at all (complete measurement loss rather than
+    partial feature loss). Missing/zero measurements are a realistic signal
+    the model should learn to handle, and they are distinguishable from the
+    legitimate near-zero mean values via temporal context.
 
     Args:
         burst_loss_prob:     P(enter burst | normal). 0 disables burst loss.
@@ -239,13 +245,13 @@ def _apply_burst_packet_loss(
     result = seq.copy()
     for t in range(K):
         if in_burst:
-            result[t] = 0.0  # packet lost — zero the step
+            result[t] = 0.0  # complete measurement loss — no features available
             if rng.random() < burst_recovery_prob:
                 in_burst = False
         else:
             if rng.random() < burst_loss_prob:
                 in_burst = True
-                result[t] = 0.0
+                result[t] = 0.0  # complete measurement loss — no features available
     return result
 
 

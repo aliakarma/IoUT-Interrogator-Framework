@@ -46,6 +46,7 @@ import math
 import os
 import random
 import copy
+import warnings
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -543,10 +544,12 @@ def sweep_thresholds(
     ]
 
     if len(valid_indices) == 0:
-        raise RuntimeWarning(
+        msg = (
             "Model collapse detected: no threshold satisfies precision constraint. "
             "Check model outputs and training convergence."
         )
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        raise RuntimeError(msg)
 
     best_f1_idx = max(valid_indices, key=lambda i: results['f1_scores'][i])
     best_recall_idx = max(valid_indices, key=lambda i: results['recalls'][i])

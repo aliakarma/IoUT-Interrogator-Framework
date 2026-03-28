@@ -66,3 +66,6 @@ logs/
 
 # OS
 Thumbs.db
+
+# Go module cache (created by go toolchain during dependency resolution)
+root/
