@@ -105,6 +105,21 @@ func (c *TrustLedgerContract) SubmitTrustDelta(
 	attackType string,
 	committedBy string,
 ) error {
+	// Verify caller identity and role (MSP-based authorization)
+	clientID, err := ctx.GetClientIdentity().GetID()
+	if err != nil {
+		return fmt.Errorf("failed to get client identity")
+	}
+	_ = clientID // identity verified; used for audit trail if extended
+
+	mspID, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get client MSP ID")
+	}
+	if mspID != "AuthorizedInterrogatorMSP" {
+		return fmt.Errorf("unauthorized client: MSP '%s' is not permitted to submit trust deltas", mspID)
+	}
+
 	// Verify agent is registered
 	identityKey := fmt.Sprintf("identity_%s", agentID)
 	identityData, err := ctx.GetStub().GetState(identityKey)

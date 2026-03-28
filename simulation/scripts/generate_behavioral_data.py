@@ -70,6 +70,16 @@ AR_PHI = 0.4
 # features (delta, rolling_mean, rolling_std, z_score, slope) to each timestep.
 ENABLE_TEMPORAL_FEATURES = True
 
+# Default noise distribution: "gaussian" | "laplace" | "mixture"
+DEFAULT_NOISE_DISTRIBUTION = "gaussian"
+
+# Default burst packet loss parameters (Markov chain)
+DEFAULT_BURST_LOSS_PROB = 0.0      # P(enter burst state); 0 = disabled
+DEFAULT_BURST_RECOVERY_PROB = 0.3  # P(exit burst state once in it)
+
+# Default heavy-tailed latency spike scale (0 = disabled)
+DEFAULT_LATENCY_SPIKE_SCALE = 0.0
+
 
 def _compute_temporal_features(seq: np.ndarray, window: int = 3) -> np.ndarray:
     """
@@ -152,22 +162,119 @@ def _compute_temporal_features(seq: np.ndarray, window: int = 3) -> np.ndarray:
 def _ar1_sequence(mean_vec: np.ndarray, K: int,
                   rng: np.random.Generator,
                   phi: float = AR_PHI,
-                  noise_sigma: float = DEFAULT_NOISE_SIGMA) -> np.ndarray:
+                  noise_sigma: float = DEFAULT_NOISE_SIGMA,
+                  noise_distribution: str = DEFAULT_NOISE_DISTRIBUTION) -> np.ndarray:
     """
     Generate a K-step temporally correlated sequence around a mean feature vector.
 
     Each step: x_t = phi * x_{t-1} + (1-phi) * mean + eps_t
     This is an exponential-smoothing state process (mean-reverting with noise),
     not strict AR(1) around zero.
+
+    Args:
+        noise_distribution: "gaussian" (default), "laplace", or "mixture"
+            - "gaussian":  standard Gaussian noise N(0, sigma)
+            - "laplace":   heavier-tailed Laplace noise with scale=sigma/sqrt(2)
+            - "mixture":   50/50 mix of Gaussian(0, sigma) and Laplace(0, sigma)
     """
     seq = np.zeros((K, len(mean_vec)), dtype=np.float32)
     x_prev = mean_vec.copy()
     for k in range(K):
-        eps      = rng.normal(0.0, noise_sigma, size=mean_vec.shape).astype(np.float32)
+        eps = _sample_noise(rng, noise_sigma, mean_vec.shape, noise_distribution)
         x_curr   = phi * x_prev + (1.0 - phi) * mean_vec + eps
         seq[k]   = np.clip(x_curr, 0.0, 1.0)
         x_prev   = seq[k]
     return seq
+
+
+def _sample_noise(
+    rng: np.random.Generator,
+    sigma: float,
+    shape,
+    distribution: str,
+) -> np.ndarray:
+    """
+    Sample noise from a specified distribution.
+
+    Args:
+        distribution: "gaussian", "laplace", or "mixture"
+    """
+    if distribution == "laplace":
+        # Laplace scale b = sigma/sqrt(2) keeps the variance equal to sigma^2
+        scale = sigma / np.sqrt(2.0)
+        return rng.laplace(0.0, scale, size=shape).astype(np.float32)
+    elif distribution == "mixture":
+        # 50/50 mix of Gaussian and Laplace for a heavier tail than pure Gaussian
+        mask = rng.random(size=shape) < 0.5
+        gaussian = rng.normal(0.0, sigma, size=shape).astype(np.float32)
+        laplace = rng.laplace(0.0, sigma / np.sqrt(2.0), size=shape).astype(np.float32)
+        return np.where(mask, gaussian, laplace).astype(np.float32)
+    else:
+        # Default: Gaussian
+        return rng.normal(0.0, sigma, size=shape).astype(np.float32)
+
+
+def _apply_burst_packet_loss(
+    seq: np.ndarray,
+    rng: np.random.Generator,
+    burst_loss_prob: float,
+    burst_recovery_prob: float = DEFAULT_BURST_RECOVERY_PROB,
+) -> np.ndarray:
+    """
+    Apply Markov-chain burst packet loss to a sequence.
+
+    A two-state Markov chain models correlated packet loss:
+      - Normal state  → burst state  with probability burst_loss_prob
+      - Burst state   → normal state with probability burst_recovery_prob
+    During a burst, the step value is zeroed (packet lost).
+
+    Args:
+        burst_loss_prob:     P(enter burst | normal). 0 disables burst loss.
+        burst_recovery_prob: P(exit burst | burst).
+    """
+    if burst_loss_prob <= 0.0:
+        return seq
+    K = seq.shape[0]
+    in_burst = False
+    result = seq.copy()
+    for t in range(K):
+        if in_burst:
+            result[t] = 0.0  # packet lost — zero the step
+            if rng.random() < burst_recovery_prob:
+                in_burst = False
+        else:
+            if rng.random() < burst_loss_prob:
+                in_burst = True
+                result[t] = 0.0
+    return result
+
+
+def _apply_latency_spikes(
+    seq: np.ndarray,
+    rng: np.random.Generator,
+    latency_spike_scale: float,
+    timing_feature_idx: int = 0,
+) -> np.ndarray:
+    """
+    Add heavy-tailed latency spikes (Pareto-distributed) to the timing feature.
+
+    Uses a Pareto distribution to model occasional large latency outliers that
+    cannot occur in Gaussian noise. Only affects the timing variance feature.
+
+    Args:
+        latency_spike_scale: scale of Pareto spikes (0 = disabled).
+        timing_feature_idx:  column index of the timing-variance feature.
+    """
+    if latency_spike_scale <= 0.0:
+        return seq
+    K = seq.shape[0]
+    result = seq.copy()
+    # Pareto shape a=1.5 gives heavy tail (finite mean, infinite variance)
+    spikes = rng.pareto(a=1.5, size=K).astype(np.float32) * latency_spike_scale
+    result[:, timing_feature_idx] = np.clip(
+        result[:, timing_feature_idx] + spikes, 0.0, 1.0
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +293,9 @@ def generate_legitimate_sequence(
     rng: np.random.Generator,
     noise_sigma: float = DEFAULT_NOISE_SIGMA,
     phi: float = AR_PHI,
+    noise_distribution: str = DEFAULT_NOISE_DISTRIBUTION,
+    burst_loss_prob: float = DEFAULT_BURST_LOSS_PROB,
+    latency_spike_scale: float = DEFAULT_LATENCY_SPIKE_SCALE,
 ) -> np.ndarray:
     """
     Temporally correlated sequence centered on legitimate behavioral means.
@@ -195,7 +305,11 @@ def generate_legitimate_sequence(
     # Small per-agent jitter: each legitimate agent has slightly different baseline
     jitter = rng.normal(0.0, 0.04, size=_LEGIT_MEAN.shape).astype(np.float32)
     agent_mean = np.clip(_LEGIT_MEAN + jitter, 0.05, 0.95)
-    return _ar1_sequence(agent_mean, K, rng, phi=phi, noise_sigma=noise_sigma)
+    seq = _ar1_sequence(agent_mean, K, rng, phi=phi, noise_sigma=noise_sigma,
+                        noise_distribution=noise_distribution)
+    seq = _apply_burst_packet_loss(seq, rng, burst_loss_prob)
+    seq = _apply_latency_spikes(seq, rng, latency_spike_scale)
+    return seq
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +339,9 @@ def generate_adversarial_sequence(
     rng: np.random.Generator,
     noise_sigma: float = DEFAULT_NOISE_SIGMA,
     phi: float = AR_PHI,
+    noise_distribution: str = DEFAULT_NOISE_DISTRIBUTION,
+    burst_loss_prob: float = DEFAULT_BURST_LOSS_PROB,
+    latency_spike_scale: float = DEFAULT_LATENCY_SPIKE_SCALE,
 ) -> np.ndarray:
     """
     Temporally correlated sequence centered on adversarial behavioral means.
@@ -239,7 +356,12 @@ def generate_adversarial_sequence(
     agent_mean = np.clip(mean + jitter, 0.05, 0.95)
 
     # Adversarial agents have higher temporal variance (less stable behavior)
-    return _ar1_sequence(agent_mean, K, rng, phi=phi * 0.7, noise_sigma=noise_sigma * 1.3)
+    seq = _ar1_sequence(agent_mean, K, rng, phi=phi * 0.7,
+                        noise_sigma=noise_sigma * 1.3,
+                        noise_distribution=noise_distribution)
+    seq = _apply_burst_packet_loss(seq, rng, burst_loss_prob)
+    seq = _apply_latency_spikes(seq, rng, latency_spike_scale)
+    return seq
 
 
 def _parse_float_list(value: str) -> List[float]:
@@ -324,6 +446,9 @@ def generate_dataset(
     seed: int,
     noise_sigma: float = DEFAULT_NOISE_SIGMA,
     attack_mix: Optional[List[Tuple[str, float]]] = None,
+    noise_distribution: str = DEFAULT_NOISE_DISTRIBUTION,
+    burst_loss_prob: float = DEFAULT_BURST_LOSS_PROB,
+    latency_spike_scale: float = DEFAULT_LATENCY_SPIKE_SCALE,
 ) -> Tuple[List[dict], pd.DataFrame]:
     """
     Generate a full dataset of behavioral sequences with labels.
@@ -334,6 +459,9 @@ def generate_dataset(
       - Gaussian noise on every feature step.
       - 'low_and_slow' mimicry attack type added.
       - Uses separate RNG streams for legit vs adversarial.
+      - Optional Markov burst packet loss (burst_loss_prob > 0).
+      - Optional heavy-tailed latency spikes (latency_spike_scale > 0).
+      - Optional non-Gaussian noise ("laplace" or "mixture" distributions).
 
     Returns:
         sequences: list of dicts {agent_id, sequence, label, attack_type}
@@ -350,7 +478,12 @@ def generate_dataset(
 
     # ── Legitimate agents ─────────────────────────────────────────────────
     for i in range(n_legit):
-        seq = generate_legitimate_sequence(K, rng_legit, noise_sigma=noise_sigma)
+        seq = generate_legitimate_sequence(
+            K, rng_legit, noise_sigma=noise_sigma,
+            noise_distribution=noise_distribution,
+            burst_loss_prob=burst_loss_prob,
+            latency_spike_scale=latency_spike_scale,
+        )
         seq_enriched = _compute_temporal_features(seq, window=3)
         sequences.append({
             "agent_id":   i,
@@ -365,7 +498,12 @@ def generate_dataset(
     for j in range(n_adv):
         agent_id  = n_legit + j
         atk = _sample_attack_type(rng_adv, attack_mix=attack_mix, index=j)
-        seq = generate_adversarial_sequence(K, atk, rng_adv, noise_sigma=noise_sigma)
+        seq = generate_adversarial_sequence(
+            K, atk, rng_adv, noise_sigma=noise_sigma,
+            noise_distribution=noise_distribution,
+            burst_loss_prob=burst_loss_prob,
+            latency_spike_scale=latency_spike_scale,
+        )
         seq_enriched = _compute_temporal_features(seq, window=3)
         sequences.append({
             "agent_id":   agent_id,
@@ -481,6 +619,35 @@ def main():
     )
     parser.add_argument("--seed",           type=int,   default=42)
     parser.add_argument("--out-dir",        default="data/")
+    parser.add_argument(
+        "--burst-loss-prob",
+        type=float,
+        default=DEFAULT_BURST_LOSS_PROB,
+        help=(
+            "Probability of entering a burst packet-loss state (Markov chain). "
+            "0 (default) disables burst loss. E.g. 0.05 for ~5%% burst entry rate."
+        ),
+    )
+    parser.add_argument(
+        "--latency-spike-scale",
+        type=float,
+        default=DEFAULT_LATENCY_SPIKE_SCALE,
+        help=(
+            "Scale of heavy-tailed Pareto latency spikes on the timing feature. "
+            "0 (default) disables spikes. E.g. 0.1 for occasional large outliers."
+        ),
+    )
+    parser.add_argument(
+        "--noise-distribution",
+        default=DEFAULT_NOISE_DISTRIBUTION,
+        choices=["gaussian", "laplace", "mixture"],
+        help=(
+            "Noise distribution for sequence generation. "
+            "'gaussian' (default): standard Gaussian; "
+            "'laplace': heavier-tailed Laplace; "
+            "'mixture': 50/50 Gaussian+Laplace mix."
+        ),
+    )
     args = parser.parse_args()
 
     os.makedirs(os.path.join(args.out_dir, "raw"),       exist_ok=True)
@@ -547,6 +714,9 @@ def main():
             seed=cfg_seed,
             noise_sigma=noise_sigma,
             attack_mix=attack_mix,
+            noise_distribution=args.noise_distribution,
+            burst_loss_prob=args.burst_loss_prob,
+            latency_spike_scale=args.latency_spike_scale,
         )
 
         base_name = (
