@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -119,7 +120,7 @@ def main():
 
     # ── Step 1: Generate data ─────────────────────────────────────────────
     step("1/5 — Generate synthetic behavioral data")
-    from simulation.scripts.generate_behavioral_data import generate_dataset, main as gen_main
+    from simulation.scripts.generate_behavioral_data import main as gen_main
     import sys as _sys
     _sys.argv = [
         "generate_behavioral_data.py",
@@ -178,6 +179,14 @@ def main():
         ]
     sim_main()
 
+    required_outputs = [
+        "simulation/outputs/results.csv",
+        "simulation/outputs/raw_results.csv",
+    ]
+    for output_path in required_outputs:
+        if not os.path.exists(output_path):
+            raise FileNotFoundError(f"Expected pipeline output was not created: {output_path}")
+
     # ── Step 4: Run inference ─────────────────────────────────────────────
     step("4/5 — Run trust inference on sample sequences")
     from model.inference.infer import run_inference
@@ -213,11 +222,53 @@ def main():
         "statistical_summary.py",
         "--input",  "simulation/outputs/raw_results.csv",
         "--output", "analysis/stats/summary_table.csv",
+        "--aggregate-level", "seed",
         "--bootstrap-samples", "2000",
         "--ci-level", "95",
         "--seed", str(args.seed),
     ]
     stats_main()
+
+    from scripts.export_all_results import export_results
+    export_results(
+        output_dir="analysis/final_results",
+        sim_outputs_dir="simulation/outputs",
+        analysis_stats_dir="analysis/stats",
+        checkpoint_dir="model/checkpoints",
+    )
+
+    def _sha256(path: str) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    provenance = {
+        "seed": args.seed,
+        "runs": effective_runs,
+        "intervals": effective_intervals,
+        "quick": bool(args.quick),
+        "use_transformer": bool(args.use_transformer),
+        "artifacts": {},
+    }
+    artifact_paths = [
+        "model/checkpoints/best_model.pt",
+        "model/checkpoints/preprocessing_stats.json",
+        "model/checkpoints/evaluation_metrics.json",
+        "simulation/outputs/results.csv",
+        "simulation/outputs/raw_results.csv",
+        "analysis/stats/summary_table.csv",
+        "analysis/final_results/main_metrics.csv",
+    ]
+    for artifact_path in artifact_paths:
+        if os.path.exists(artifact_path):
+            provenance["artifacts"][artifact_path] = {
+                "sha256": _sha256(artifact_path),
+                "size_bytes": os.path.getsize(artifact_path),
+            }
+    with open("analysis/final_results/provenance_manifest.json", "w", encoding="utf-8") as f:
+        json.dump(provenance, f, indent=2)
 
     # ── Done ──────────────────────────────────────────────────────────────
     elapsed = time.time() - t0

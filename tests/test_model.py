@@ -101,7 +101,8 @@ class TestTrustTransformer:
             f"Expected ~500K-1.2M params, got {n:,}"
 
     def test_output_shape(self):
-        x   = torch.randn(4, 64, 5)
+        input_dim = self.config["architecture"]["input_dim"]
+        x   = torch.randn(4, 64, input_dim)
         out = self.model(x)
         assert out.shape == (4, 1)
 
@@ -112,7 +113,8 @@ class TestTrustTransformer:
         Logits from a random-init model can be outside [0,1].
         """
         torch.manual_seed(0)
-        x      = torch.randn(50, 64, 5) * 3.0   # extreme inputs
+        input_dim = self.config["architecture"]["input_dim"]
+        x      = torch.randn(50, 64, input_dim) * 3.0   # extreme inputs
         logits = self.model(x)
         # At least some logits should be outside [0,1] for an untrained model
         # (if all are in [0,1], sigmoid is still present — bug still there)

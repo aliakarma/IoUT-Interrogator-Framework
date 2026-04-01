@@ -1,0 +1,14 @@
+{
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "epochs": 8,
+  "notes": [
+    "Splits are stratified and created before preprocessing.",
+    "Sklearn baselines use Pipeline(imputer, scaler, model) fit on train only.",
+    "Calibration is selected on validation only.",
+    "Threshold is tuned on validation only with recall-aware objective."
+  ]
+}

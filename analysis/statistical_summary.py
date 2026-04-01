@@ -270,7 +270,7 @@ def main():
     parser.add_argument(
         "--aggregate-level",
         choices=["row", "seed"],
-        default="row",
+        default="seed",
         help=(
             "Aggregation unit for summary statistics. "
             "'row' preserves legacy behavior; 'seed' computes one value per seed "

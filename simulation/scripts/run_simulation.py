@@ -50,7 +50,9 @@ def run_single_simulation(config_path: str, seed: int,
                            sequence_len_override: int = None,
                            disable_energy_model: bool = False,
                            disable_routing_model: bool = False,
-                           disable_blockchain: bool = False) -> dict:
+                           disable_blockchain: bool = False,
+                           inject_detection_noise: bool = False,
+                           jitter_threshold: bool = False) -> dict:
     """Run one simulation trial and return interval-level results."""
     env = IoUTEnvironment(
         config_path=config_path,
@@ -122,6 +124,8 @@ def run_single_simulation(config_path: str, seed: int,
         transformer_trust_fn=transformer_trust_fn,
         sequence_len=sequence_len,
         log_trust_stats=log_trust_stats,
+        inject_detection_noise=inject_detection_noise,
+        jitter_threshold=jitter_threshold,
     )
 
 
@@ -266,6 +270,16 @@ def main():
         action="store_true",
         help="Disable blockchain trust commit integration during simulation.",
     )
+    parser.add_argument(
+        "--inject-detection-noise",
+        action="store_true",
+        help="Inject post-inference trust noise for robustness experiments only.",
+    )
+    parser.add_argument(
+        "--jitter-threshold",
+        action="store_true",
+        help="Jitter tau_min across intervals for robustness experiments only.",
+    )
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -306,6 +320,8 @@ def main():
             disable_energy_model=args.disable_energy_model,
             disable_routing_model=args.disable_routing_model,
             disable_blockchain=args.disable_blockchain,
+            inject_detection_noise=args.inject_detection_noise,
+            jitter_threshold=args.jitter_threshold,
         )
         all_results.append(result)
 

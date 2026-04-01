@@ -84,9 +84,9 @@ python simulation/scripts/run_simulation.py \
     --output simulation/outputs/results.csv
 ```
 
-Expected output: `simulation/outputs/results.csv` with 20 rows and aggregated
-mean/std columns for accuracy, precision, recall, F1, confusion matrix counts,
-PDR, energy, and trust-distribution diagnostics.
+Expected outputs:
+- `simulation/outputs/results.csv` with aggregated interval-level mean/std columns
+- `simulation/outputs/raw_results.csv` in long format (`run_id, seed, interval, metric_name, value`)
 
 ---
 
@@ -112,7 +112,9 @@ python model/inference/train.py \
     --seed 42
 ```
 
-Expected: `model/checkpoints/best_model.pt` (~5–7 MB)
+Expected:
+- `model/checkpoints/best_model.pt`
+- `model/checkpoints/preprocessing_stats.json` (saved normalization statistics for inference/simulation consistency)
 
 ---
 
@@ -150,6 +152,11 @@ Figures saved to `analysis/plots/`:
 ```bash
 python scripts/reproduce_all.py --seed 42 --runs 30
 ```
+
+The full pipeline also writes:
+- `analysis/stats/summary_table.csv`
+- `analysis/final_results/*.csv`
+- `analysis/final_results/provenance_manifest.json`
 
 ---
 

@@ -1,0 +1,60 @@
+{
+  "metadata": {
+    "approach": "Threshold sweep on validation set, applied to test set",
+    "note": "Prevents data leakage: threshold and temperature selected on validation ONLY"
+  },
+  "data_hardening": {
+    "n_original": 349,
+    "n_augmented": 377,
+    "class_counts_before": {
+      "0": 297,
+      "1": 52
+    },
+    "class_counts_after": {
+      "0": 317,
+      "1": 60
+    },
+    "label_flip_count": 10,
+    "hard_sample_duplicates": 28,
+    "gaussian_noise_sigma_frac": 0.1,
+    "overlap_alpha_range": [
+      0.6,
+      0.9
+    ],
+    "feature_dropout_rate": 0.08
+  },
+  "best_validation": {
+    "epoch": 7,
+    "loss": 0.8641013390309101,
+    "accuracy": 0.5540540540540541,
+    "precision": 0.2499999999431818,
+    "recall": 0.999999999090909,
+    "f1": 0.39999999665454544,
+    "ece": 0.24882309460962138,
+    "brier": 0.1475040316581726
+  },
+  "test": {
+    "threshold_used": 0.3500000000000001,
+    "loss": 0.5643445532043259,
+    "accuracy": 0.922077922077922,
+    "precision": 0.749999999375,
+    "recall": 0.749999999375,
+    "f1": 0.749999994375,
+    "roc_auc": 0.9564102564102565,
+    "pr_auc": 0.8880563880563881,
+    "ece": 0.03630183615371005,
+    "brier": 0.04504111036658287
+  },
+  "test_diagnostics": {
+    "fraction_predicted_positive": 0.15584415584415584,
+    "fraction_predicted_negative": 0.8441558441558441,
+    "tp": 9,
+    "tn": 62,
+    "fp": 3,
+    "fn": 3
+  },
+  "calibration": {
+    "temperature": 0.25,
+    "ece_bins": 10
+  }
+}

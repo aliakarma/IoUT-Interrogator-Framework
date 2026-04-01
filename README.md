@@ -123,7 +123,8 @@ evaluation_setup:
 5. **The proposed method achieves the best trade-off** between detection accuracy and system efficiency.
 
 **Source files:**
-- `simulation/outputs/results.csv` — Raw per-run outputs
+- `simulation/outputs/results.csv` — Aggregated interval-level metrics for the active run
+- `simulation/outputs/raw_results.csv` — Long-format raw run-level metrics used for summary tables
 - `analysis/stats/summary_table.csv` — Aggregated statistics
 - `analysis/plot_*.py` — Visualization scripts
 
@@ -358,6 +359,9 @@ pip install -r requirements.txt
 > **Version policy:** this project supports Python **3.9-3.11** only.
 > Entry-point scripts include a runtime guard that fails fast on unsupported
 > interpreters to avoid dependency resolution issues.
+> The repository ships code and sample inputs; generated checkpoints and
+> publication tables are recreated by the pipeline and tracked via
+> `analysis/final_results/provenance_manifest.json`.
 
 > **Tip:** Use a virtual environment for isolation:
 > ```bash

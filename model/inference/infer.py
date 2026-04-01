@@ -40,6 +40,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from compat import ensure_supported_python
 from model.inference.transformer_model import (
     TrustTransformer,
+    load_model,
+    normalize_sequence_features,
+    _prepare_sequence_array,
     set_seeds,
 )
 
@@ -174,10 +177,11 @@ def run_inference(
     seq_len = config["architecture"]["seq_len"]
 
     # Load model
-    model = TrustTransformer(config)
     if os.path.exists(checkpoint_path):
-        model.load_state_dict(
-            torch.load(checkpoint_path, weights_only=True, map_location="cpu")
+        model = load_model(
+            checkpoint_path=checkpoint_path,
+            config_path=config_path,
+            quantized=False,
         )
         print(f"Loaded checkpoint: {checkpoint_path}")
     else:
@@ -185,11 +189,18 @@ def run_inference(
             f"WARNING: Checkpoint not found ({checkpoint_path}). "
             "Using untrained model — scores will be near-random."
         )
+        model = TrustTransformer(config)
     model.eval()
 
     results = []
     for item in sequences:
         seq = _pad_or_truncate_sequence(item["sequence"], seq_len)
+        seq = _prepare_sequence_array(seq, expected_dim=int(config["architecture"]["input_dim"]))
+        seq = normalize_sequence_features(
+            seq,
+            getattr(model, "feature_mean", None),
+            getattr(model, "feature_std", None),
+        )
 
         with torch.no_grad():
             x = torch.from_numpy(seq).unsqueeze(0)

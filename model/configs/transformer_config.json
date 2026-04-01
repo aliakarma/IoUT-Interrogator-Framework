@@ -46,15 +46,26 @@
     "val_split": 0.15,
     "test_split": 0.15,
     "stratified_split": true,
-    "early_stopping_patience": 15,
+    "early_stopping_patience": 10,
     "random_seed": 42,
-    "label_smoothing": 0.1,
+    "label_smoothing": 0.02,
     "use_focal_loss": false,
     "_focal_loss_note": "Set to true to use Focal Loss instead of BCE for better handling of class imbalance",
     "focal_alpha": 0.75,
     "_focal_alpha_note": "Weighting factor for minority class in Focal Loss (range 0.25-0.75)",
     "focal_gamma": 2.0,
-    "_focal_gamma_note": "Focusing parameter for hard examples (typical range 1.0-3.0)"
+    "_focal_gamma_note": "Focusing parameter for hard examples (typical range 1.0-3.0)",
+    "oversample_minority": true,
+    "data_hardening": {
+      "enabled": true,
+      "gaussian_sigma_frac": 0.1,
+      "overlap_alpha_low": 0.6,
+      "overlap_alpha_high": 0.9,
+      "label_flip_fraction": 0.03,
+      "hard_duplicate_fraction": 0.08,
+      "feature_dropout_rate": 0.08,
+      "top_feature_fraction": 0.08
+    }
   },
 
   "trust_scoring": {

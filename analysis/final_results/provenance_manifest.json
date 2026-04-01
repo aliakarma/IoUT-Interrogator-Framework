@@ -1,0 +1,37 @@
+{
+  "seed": 42,
+  "runs": 30,
+  "intervals": 20,
+  "quick": false,
+  "use_transformer": true,
+  "artifacts": {
+    "model/checkpoints/best_model.pt": {
+      "sha256": "51e93e6d4137de57c2a5bbbb03d9ef49761bc03d3ecdbaa074809e9658ba6f7c",
+      "size_bytes": 1687714
+    },
+    "model/checkpoints/preprocessing_stats.json": {
+      "sha256": "07efc6a6ab5993ef2b9f9d55c6f1b2479494ba853f1fb9576aa2697aba7ea14d",
+      "size_bytes": 1637
+    },
+    "model/checkpoints/evaluation_metrics.json": {
+      "sha256": "636d8c2fd60b81ed05e3b1785f51e583359fb9069ff5c18a9dc751a1b4ae08b4",
+      "size_bytes": 1672
+    },
+    "simulation/outputs/results.csv": {
+      "sha256": "4ad771c572d08641e7f594713c4ea4d61a8d0d22dad2d38d1a231aa29a034e1b",
+      "size_bytes": 34481
+    },
+    "simulation/outputs/raw_results.csv": {
+      "sha256": "6e9168c59812c20d2072d38f5717b80b500716089c3ce0357ff82ad3610bdf3c",
+      "size_bytes": 1100866
+    },
+    "analysis/stats/summary_table.csv": {
+      "sha256": "044cfb1fb8a5bd9b8cd54483f9fa30c434092f2e6300e012983dcf3bdbc81b5e",
+      "size_bytes": 2987
+    },
+    "analysis/final_results/main_metrics.csv": {
+      "sha256": "044411c8c550f4e896810aa9c3db528e19fe1bb5641c73ba8e6771f0d72eb6f4",
+      "size_bytes": 1672
+    }
+  }
+}
