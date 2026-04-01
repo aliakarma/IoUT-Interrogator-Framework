@@ -60,7 +60,7 @@ ATTACK_TYPES = [
 
 # Global default noise level: sigma = 0.08 simulates acoustic channel variation
 # and measurement uncertainty in the interrogator's metadata collection.
-DEFAULT_NOISE_SIGMA = 0.08
+DEFAULT_NOISE_SIGMA = 0.11
 
 # Exponential-smoothing persistence coefficient: φ = 0.4
 # Each time step partially inherits the previous step's state.
@@ -71,14 +71,14 @@ AR_PHI = 0.4
 ENABLE_TEMPORAL_FEATURES = True
 
 # Default noise distribution: "gaussian" | "laplace" | "mixture"
-DEFAULT_NOISE_DISTRIBUTION = "gaussian"
+DEFAULT_NOISE_DISTRIBUTION = "mixture"
 
 # Default burst packet loss parameters (Markov chain)
-DEFAULT_BURST_LOSS_PROB = 0.0      # P(enter burst state); 0 = disabled
+DEFAULT_BURST_LOSS_PROB = 0.03     # P(enter burst state)
 DEFAULT_BURST_RECOVERY_PROB = 0.3  # P(exit burst state once in it)
 
 # Default heavy-tailed latency spike scale (0 = disabled)
-DEFAULT_LATENCY_SPIKE_SCALE = 0.0
+DEFAULT_LATENCY_SPIKE_SCALE = 0.05
 
 
 def _compute_temporal_features(seq: np.ndarray, window: int = 3) -> np.ndarray:
@@ -290,7 +290,7 @@ def _apply_latency_spikes(
 # v1 used Beta(2,8), Beta(1,9), Beta(8,2), Beta(1,9), Beta(9,1)
 # Those have means [0.20, 0.10, 0.80, 0.10, 0.90] — very extreme.
 # v2 uses means closer to centre so classes overlap more realistically.
-_LEGIT_MEAN = np.array([0.22, 0.12, 0.78, 0.13, 0.85], dtype=np.float32)
+_LEGIT_MEAN = np.array([0.26, 0.16, 0.73, 0.18, 0.80], dtype=np.float32)
 # Feature σ ≈ 0.10-0.12 after noise → target separation ≤ 2.0x with adversarial
 
 
@@ -309,7 +309,7 @@ def generate_legitimate_sequence(
     stability, low neighbor churn, high protocol compliance.
     """
     # Small per-agent jitter: each legitimate agent has slightly different baseline
-    jitter = rng.normal(0.0, 0.04, size=_LEGIT_MEAN.shape).astype(np.float32)
+    jitter = rng.normal(0.0, 0.05, size=_LEGIT_MEAN.shape).astype(np.float32)
     agent_mean = np.clip(_LEGIT_MEAN + jitter, 0.05, 0.95)
     seq = _ar1_sequence(agent_mean, K, rng, phi=phi, noise_sigma=noise_sigma,
                         noise_distribution=noise_distribution)
@@ -326,16 +326,16 @@ def generate_legitimate_sequence(
 # to legitimate means than v1, creating non-trivial classification difficulty.
 _ADV_MEANS = {
     # v1: retx ~Beta(7,3)→0.70. v2: 0.52 — less extreme, more overlap
-    "selective_packet_drop": np.array([0.38, 0.52, 0.48, 0.22, 0.62], dtype=np.float32),
+    "selective_packet_drop": np.array([0.33, 0.39, 0.58, 0.23, 0.69], dtype=np.float32),
     # v1: routing_stab ~Beta(2,8)→0.20. v2: 0.38 — less extreme
-    "route_manipulation":    np.array([0.28, 0.22, 0.38, 0.58, 0.52], dtype=np.float32),
+    "route_manipulation":    np.array([0.30, 0.20, 0.49, 0.42, 0.60], dtype=np.float32),
     # v1: timing_var ~Beta(8,2)→0.80. v2: 0.65 — closer to legitimate
-    "transmission_burst":    np.array([0.65, 0.62, 0.52, 0.38, 0.55], dtype=np.float32),
+    "transmission_burst":    np.array([0.52, 0.46, 0.58, 0.31, 0.62], dtype=np.float32),
     # v1: coord_insider was already relatively subtle
-    "coordinated_insider":   np.array([0.35, 0.42, 0.55, 0.38, 0.48], dtype=np.float32),
+    "coordinated_insider":   np.array([0.32, 0.31, 0.60, 0.30, 0.60], dtype=np.float32),
     # NEW: low_and_slow — barely deviates, partial overlap with legitimate
     # This is the hardest attack to detect (mimicry strategy)
-    "low_and_slow":          np.array([0.28, 0.20, 0.68, 0.20, 0.72], dtype=np.float32),
+    "low_and_slow":          np.array([0.27, 0.18, 0.70, 0.19, 0.76], dtype=np.float32),
 }
 
 
@@ -358,12 +358,12 @@ def generate_adversarial_sequence(
     mean = _ADV_MEANS.get(attack_type, _ADV_MEANS["coordinated_insider"]).copy()
 
     # Per-agent jitter (larger for adversarial to simulate inconsistent behavior)
-    jitter = rng.normal(0.0, 0.05, size=mean.shape).astype(np.float32)
+    jitter = rng.normal(0.0, 0.06, size=mean.shape).astype(np.float32)
     agent_mean = np.clip(mean + jitter, 0.05, 0.95)
 
     # Adversarial agents have higher temporal variance (less stable behavior)
-    seq = _ar1_sequence(agent_mean, K, rng, phi=phi * 0.7,
-                        noise_sigma=noise_sigma * 1.3,
+    seq = _ar1_sequence(agent_mean, K, rng, phi=phi * 0.8,
+                        noise_sigma=noise_sigma * 1.15,
                         noise_distribution=noise_distribution)
     seq = _apply_burst_packet_loss(seq, rng, burst_loss_prob)
     seq = _apply_latency_spikes(seq, rng, latency_spike_scale)
@@ -561,10 +561,15 @@ def generate_stratified_sample(
 # ---------------------------------------------------------------------------
 
 def print_feature_stats(sequences: List[dict], n_show: int = 3):
-    """Print per-class feature mean/std to verify overlap is realistic."""
+    """Print per-class base-feature mean/std to verify overlap is realistic."""
     import numpy as np
-    feat_names = ["timing_var", "retx_freq", "routing_stab",
-                  "neighbor_churn", "protocol_comp"]
+    feat_names = [
+        "timing_var",
+        "retx_freq",
+        "routing_stab",
+        "neighbor_churn",
+        "protocol_comp",
+    ]
 
     legit_seqs = [np.array(s["sequence"]) for s in sequences if s["label"] == 0]
     adv_seqs   = [np.array(s["sequence"]) for s in sequences if s["label"] == 1]
@@ -572,17 +577,22 @@ def print_feature_stats(sequences: List[dict], n_show: int = 3):
     if not legit_seqs or not adv_seqs:
         return
 
-    # Mean over all time steps and agents
-    legit_flat = np.concatenate(legit_seqs, axis=0)   # (N_l * K, 5)
-    adv_flat   = np.concatenate(adv_seqs,   axis=0)   # (N_a * K, 5)
+    # Mean over all time steps and agents. When temporal enrichment is enabled,
+    # keep only the original value channel for each of the 5 base features.
+    legit_flat = np.concatenate(legit_seqs, axis=0)
+    adv_flat   = np.concatenate(adv_seqs,   axis=0)
+    if legit_flat.shape[1] == 30:
+        base_feature_columns = [0, 6, 12, 18, 24]
+        legit_flat = legit_flat[:, base_feature_columns]
+        adv_flat = adv_flat[:, base_feature_columns]
 
-    print(f"\n  {'Feature':<20} {'Legit μ±σ':<16} {'Adv μ±σ':<16} {'Sep (x std)'}")
+    print(f"\n  {'Feature':<20} {'Legit mean+/-std':<24} {'Adv mean+/-std':<24} {'Sep (x std)'}")
     print(f"  {'-'*65}")
     for i, fname in enumerate(feat_names):
         lm, ls = legit_flat[:, i].mean(), legit_flat[:, i].std()
         am, as_ = adv_flat[:, i].mean(),   adv_flat[:, i].std()
         sep = abs(lm - am) / ((ls + as_) / 2 + 1e-8)
-        print(f"  {fname:<20} {lm:.2f}±{ls:.2f}       {am:.2f}±{as_:.2f}       {sep:.1f}x")
+        print(f"  {fname:<20} {lm:.2f}+/-{ls:.2f}             {am:.2f}+/-{as_:.2f}             {sep:.1f}x")
 
 
 # ---------------------------------------------------------------------------

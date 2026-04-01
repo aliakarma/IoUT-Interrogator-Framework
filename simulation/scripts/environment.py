@@ -578,7 +578,9 @@ class IoUTEnvironment:
             transformer_trust_fn=None,
             sequence_len: int = 64,
             log_trust_stats: bool = False,
-            enforce_non_degenerate: bool = True) -> Dict:
+            enforce_non_degenerate: bool = True,
+            inject_detection_noise: bool = False,
+            jitter_threshold: bool = False) -> Dict:
         """
         Run the full simulation for a given number of monitoring intervals.
 
@@ -739,17 +741,22 @@ class IoUTEnvironment:
                     "Rejecting run to preserve scientific validity."
                 )
 
-            interval_tau = float(np.clip(
-                tau_min + self.np_rng.normal(0.0, 0.035),
-                0.55,
-                0.78,
-            ))
+            interval_tau = tau_min
+            if jitter_threshold:
+                interval_tau = float(np.clip(
+                    tau_min + self.np_rng.normal(0.0, 0.035),
+                    0.55,
+                    0.78,
+                ))
 
-            # Proposed trust inference uncertainty from channel/feature noise.
-            prop_eval_trust = {
-                agent_id: float(np.clip(score + self.np_rng.normal(0.0, prop_inference_noise_std), 0.0, 1.0))
-                for agent_id, score in prop_trust.items()
-            }
+            # Optional uncertainty injection for dedicated robustness studies.
+            if inject_detection_noise:
+                prop_eval_trust = {
+                    agent_id: float(np.clip(score + self.np_rng.normal(0.0, prop_inference_noise_std), 0.0, 1.0))
+                    for agent_id, score in prop_trust.items()
+                }
+            else:
+                prop_eval_trust = dict(prop_trust)
 
             # ---- Detection metrics: proposed ----
             prop_metrics = self._compute_detection_metrics(prop_eval_trust, interval_tau)

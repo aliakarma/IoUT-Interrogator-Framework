@@ -27,6 +27,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Run unit tests
+        run: |
+          set -euxo pipefail
+          pytest tests -q
+
       - name: Validate quick pipeline command (README)
         run: |
           set -euxo pipefail

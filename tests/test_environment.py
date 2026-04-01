@@ -20,6 +20,7 @@ CONFIG_PATH = "simulation/configs/simulation_params.json"
 # ── Data generator tests ──────────────────────────────────────────────────
 
 class TestDataGenerator:
+    BASE_FEATURE_COLUMNS = [0, 6, 12, 18, 24]
 
     def test_generates_both_classes(self):
         from simulation.scripts.generate_behavioral_data import generate_dataset
@@ -36,10 +37,10 @@ class TestDataGenerator:
             f"low_and_slow missing from attacks: {atks}"
 
     def test_ar1_temporal_correlation(self):
-        """Each feature should have positive lag-1 autocorrelation."""
+        """Raw value channels should retain positive lag-1 autocorrelation."""
         from simulation.scripts.generate_behavioral_data import generate_dataset
         seqs, _ = generate_dataset(30, K=64, adv_fraction=0.0, seed=42)
-        for feat_i in range(5):
+        for feat_i in self.BASE_FEATURE_COLUMNS:
             autocorrs = []
             for s in seqs[:10]:
                 col = np.array(s["sequence"])[:, feat_i]
@@ -50,19 +51,21 @@ class TestDataGenerator:
                 f"Feature {feat_i}: expected positive AR(1) correlation, got {mean_ac:.3f}"
 
     def test_feature_values_in_01(self):
+        """Original value channels remain clipped to [0,1] after enrichment."""
         from simulation.scripts.generate_behavioral_data import generate_dataset
         seqs, _ = generate_dataset(20, K=64, adv_fraction=0.15, seed=42)
         for s in seqs:
             arr = np.array(s["sequence"])
-            assert arr.min() >= 0.0, "Feature below 0"
-            assert arr.max() <= 1.0, "Feature above 1"
+            raw = arr[:, self.BASE_FEATURE_COLUMNS]
+            assert raw.min() >= 0.0, "Base feature below 0"
+            assert raw.max() <= 1.0, "Base feature above 1"
 
     def test_sequence_shape(self):
         from simulation.scripts.generate_behavioral_data import generate_dataset
         seqs, _ = generate_dataset(10, K=64, adv_fraction=0.15, seed=42)
         for s in seqs:
             arr = np.array(s["sequence"])
-            assert arr.shape == (64, 5), f"Shape {arr.shape} != (64, 5)"
+            assert arr.shape == (64, 30), f"Shape {arr.shape} != (64, 30)"
 
     def test_stratified_sample_contains_adversarial(self):
         """

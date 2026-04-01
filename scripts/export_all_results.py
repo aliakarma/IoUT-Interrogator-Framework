@@ -149,21 +149,7 @@ def build_simulation_results(
     sim_rows: List[Dict[str, object]] = []
     sim_models = ['proposed', 'bayesian', 'static']
 
-    if multi_seed_summary is not None and not multi_seed_summary.empty:
-        for _, row in multi_seed_summary.iterrows():
-            metric_name = str(row.get('metric_name', ''))
-            mean_val = float(row.get('mean', np.nan))
-            for model in sim_models:
-                base_metric = _extract_sim_metric(metric_name, model)
-                if base_metric is None:
-                    continue
-                sim_rows.append({
-                    'model': model,
-                    'metric_name': 'trust_index' if base_metric == 'trust_mean' else base_metric,
-                    'value': mean_val,
-                })
-                break
-    elif raw_results is not None and not raw_results.empty:
+    if raw_results is not None and not raw_results.empty:
         grouped = raw_results.groupby('metric_name', as_index=False)['value'].mean()
         for _, row in grouped.iterrows():
             metric_name = str(row.get('metric_name', ''))
@@ -178,7 +164,20 @@ def build_simulation_results(
                     'value': mean_val,
                 })
                 break
-
+    elif multi_seed_summary is not None and not multi_seed_summary.empty:
+        for _, row in multi_seed_summary.iterrows():
+            metric_name = str(row.get('metric_name', ''))
+            mean_val = float(row.get('mean', np.nan))
+            for model in sim_models:
+                base_metric = _extract_sim_metric(metric_name, model)
+                if base_metric is None:
+                    continue
+                sim_rows.append({
+                    'model': model,
+                    'metric_name': 'trust_index' if base_metric == 'trust_mean' else base_metric,
+                    'value': mean_val,
+                })
+                break
     result = pd.DataFrame(sim_rows)
     if result.empty:
         return result
@@ -331,12 +330,40 @@ def compute_main_metrics(
     """
     Compute main metrics for proposed model.
     
-    Prefers multi-seed summary if available (seed-level aggregation),
-    otherwise falls back to raw results.
+    Prefers current raw results so exported publication tables stay aligned
+    with the active pipeline outputs. Falls back to multi-seed summary only
+    when raw results are unavailable.
     """
     logger.info("Computing main metrics for proposed model...")
     
-    if multi_seed_summary is not None:
+    if raw_results is not None and not raw_results.empty:
+        # Aggregate from current raw results
+        proposed_data = raw_results[
+            raw_results['metric_name'].str.contains('proposed', case=False, na=False)
+        ].copy()
+
+        proposed_data['metric'] = proposed_data['metric_name'].str.replace('_proposed', '', regex=False)
+
+        results = []
+        for metric in proposed_data['metric'].unique():
+            values = proposed_data[proposed_data['metric'] == metric]['value'].values
+            if len(values) > 0:
+                mean_val = np.mean(values)
+                std_val = np.std(values)
+                ci_lower, ci_upper = compute_bootstrap_ci(values)
+                results.append({
+                    'metric_name': metric,
+                    'mean': mean_val,
+                    'std': std_val,
+                    'ci95_lower': ci_lower,
+                    'ci95_upper': ci_upper,
+                })
+
+        result_df = pd.DataFrame(results)
+        logger.info(f"Using current raw results aggregation: {len(result_df)} metrics")
+        return result_df
+
+    elif multi_seed_summary is not None:
         # Filter for proposed model metrics
         proposed_df = multi_seed_summary[
             multi_seed_summary['metric_name'].str.contains('proposed', case=False, na=False)
@@ -352,33 +379,6 @@ def compute_main_metrics(
         logger.info(f"Using seed-level aggregation: {len(result_df)} metrics")
         return result_df
     
-    elif raw_results is not None:
-        # Aggregate from raw results
-        proposed_data = raw_results[
-            raw_results['metric_name'].str.contains('proposed', case=False, na=False)
-        ].copy()
-        
-        proposed_data['metric'] = proposed_data['metric_name'].str.replace('_proposed', '', regex=False)
-        
-        results = []
-        for metric in proposed_data['metric'].unique():
-            values = proposed_data[proposed_data['metric'] == metric]['value'].values
-            if len(values) > 0:
-                mean_val = np.mean(values)
-                std_val = np.std(values)
-                ci_lower, ci_upper = compute_bootstrap_ci(values)
-                results.append({
-                    'metric_name': metric,
-                    'mean': mean_val,
-                    'std': std_val,
-                    'ci95_lower': ci_lower,
-                    'ci95_upper': ci_upper,
-                })
-        
-        result_df = pd.DataFrame(results)
-        logger.info(f"Using raw results aggregation: {len(result_df)} metrics")
-        return result_df
-    
     else:
         logger.error("No multi-seed or raw results available!")
         return pd.DataFrame()
@@ -390,6 +390,9 @@ def compute_baseline_comparison(
 ) -> pd.DataFrame:
     """Combine and align baseline model results."""
     logger.info("Computing baseline comparison metrics...")
+
+    def _normalize_core_metric(metric_code: str, value: float) -> float:
+        return _to_unit_interval(value) if metric_code in {'C', 'RP', 'P', 'A', 'TI'} else float(value)
     
     dfs = []
     
@@ -407,7 +410,7 @@ def compute_baseline_comparison(
                     dfs.append({
                         'model': model,
                         'metric_name': metric,
-                        'mean': row[col_name],
+                        'mean': _normalize_core_metric(metric, row[col_name]),
                     })
     
     if lstm_baseline is not None:
@@ -423,7 +426,7 @@ def compute_baseline_comparison(
                     dfs.append({
                         'model': model,
                         'metric_name': metric,
-                        'mean': row[col_name],
+                        'mean': _normalize_core_metric(metric, row[col_name]),
                     })
     
     result_df = pd.DataFrame(dfs)
@@ -524,6 +527,9 @@ def compute_combined_results_table(
     Columns: C, RP, P, A, TI
     """
     logger.info("Computing combined results table for paper...")
+
+    def _normalize_core_metric(metric_code: str, value: float) -> float:
+        return _to_unit_interval(value) if metric_code in {'C', 'RP', 'P', 'A', 'TI'} else float(value)
     
     table_data = {}
     
@@ -531,7 +537,18 @@ def compute_combined_results_table(
     for model in ['proposed', 'bayesian', 'static']:
         model_data = {}
         
-        if multi_seed_summary is not None:
+        if raw_results is not None and not raw_results.empty:
+            # Prefer current raw results so exported tables cannot silently mix
+            # with stale multi-seed artifacts from earlier runs.
+            for metric in CORE_METRICS:
+                col_name = [k for k, v in METRIC_MAPPING.items() if v == metric][0] if metric in METRIC_MAPPING.values() else metric
+                metric_col = f"{col_name}_{model}"
+
+                values = raw_results[raw_results['metric_name'] == metric_col]['value'].values
+                if len(values) > 0:
+                    model_data[metric] = _normalize_core_metric(metric, np.mean(values))
+
+        elif multi_seed_summary is not None:
             # Use seed-level means
             for metric in CORE_METRICS:
                 col_name = [k for k, v in METRIC_MAPPING.items() if v == metric][0] if metric in METRIC_MAPPING.values() else metric
@@ -539,17 +556,7 @@ def compute_combined_results_table(
                 
                 subset = multi_seed_summary[multi_seed_summary['metric_name'] == metric_col]
                 if not subset.empty:
-                    model_data[metric] = subset['mean'].values[0]
-        
-        elif raw_results is not None:
-            # Aggregate from raw results
-            for metric in CORE_METRICS:
-                col_name = [k for k, v in METRIC_MAPPING.items() if v == metric][0] if metric in METRIC_MAPPING.values() else metric
-                metric_col = f"{col_name}_{model}"
-                
-                values = raw_results[raw_results['metric_name'] == metric_col]['value'].values
-                if len(values) > 0:
-                    model_data[metric] = np.mean(values)
+                    model_data[metric] = _normalize_core_metric(metric, subset['mean'].values[0])
         
         if model_data:
             table_data[model] = model_data
@@ -563,7 +570,7 @@ def compute_combined_results_table(
             for metric in CORE_METRICS:
                 col_name = [k for k, v in METRIC_MAPPING.items() if v == metric][0] if metric in METRIC_MAPPING.values() else metric
                 if col_name in test_df.columns:
-                    model_data[metric] = row[col_name]
+                    model_data[metric] = _normalize_core_metric(metric, row[col_name])
             if model_data:
                 table_data[model] = model_data
     
@@ -573,7 +580,10 @@ def compute_combined_results_table(
         for metric in CORE_METRICS:
             col_name = [k for k, v in METRIC_MAPPING.items() if v == metric][0] if metric in METRIC_MAPPING.values() else metric
             if col_name in lstm_baseline.columns:
-                model_data[metric] = test_df[col_name].values[0] if len(test_df) > 0 else None
+                model_data[metric] = (
+                    _normalize_core_metric(metric, test_df[col_name].values[0])
+                    if len(test_df) > 0 else None
+                )
         if model_data:
             table_data['lstm'] = model_data
     

@@ -54,6 +54,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import WeightedRandomSampler
+from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold
+
+from simulation.scripts.generate_behavioral_data import _compute_temporal_features
+from model.inference.data_hardening import harden_training_sequences
 
 
 # ---------------------------------------------------------------------------
@@ -264,32 +271,63 @@ class TemperatureScaler(nn.Module):
             Optimized temperature value
         """
         model.eval()
-        optimizer = torch.optim.LBFGS([self.temperature], lr=learning_rate)
+        optimizer = torch.optim.LBFGS([self.temperature], lr=learning_rate, max_iter=20)
         criterion = nn.BCEWithLogitsLoss()
-        
+
+        logits_list = []
+        labels_list = []
+        with torch.no_grad():
+            for sequences, labels in val_loader:
+                logits_list.append(model(sequences))
+                labels_list.append(labels)
+
+        if not logits_list:
+            raise ValueError("Validation loader for calibration is empty.")
+
+        logits_tensor = torch.cat(logits_list, dim=0).detach()
+        labels_tensor = torch.cat(labels_list, dim=0).detach()
+
         def closure():
             optimizer.zero_grad()
-            total_loss = 0.0
-            for sequences, labels in val_loader:
-                logits = model(sequences)
-                scaled_logits = self.forward(logits)
-                loss = criterion(scaled_logits, labels)
-                total_loss += loss.item() * sequences.size(0)
-            
-            avg_loss = total_loss / len(val_loader.dataset)
-            avg_loss.backward()
-            return avg_loss
-        
+            scaled_logits = self.forward(logits_tensor)
+            loss = criterion(scaled_logits, labels_tensor)
+            loss.backward()
+            return loss
+
         for epoch in range(epochs):
             loss = optimizer.step(closure)
+            with torch.no_grad():
+                self.temperature.clamp_(min=0.25, max=10.0)
             if verbose and epoch % 10 == 0:
-                print(f"  [calibration] Epoch {epoch}: T={self.temperature.item():.4f}, NLL={loss:.4f}")
-        
+                print(f"  [calibration] Epoch {epoch}: T={self.temperature.item():.4f}, NLL={float(loss):.4f}")
+
         optimal_temp = float(self.temperature.item())
         if verbose:
             print(f"  [calibration] Final temperature: {optimal_temp:.4f}")
         
         return optimal_temp
+
+
+class PlattScaler:
+    """Logistic calibration on raw logits for binary classification."""
+
+    def __init__(self, seed: int):
+        self.seed = seed
+        self.model = LogisticRegression(
+            solver="lbfgs",
+            max_iter=1000,
+            random_state=seed,
+        )
+
+    def fit(self, logits: np.ndarray, labels: np.ndarray) -> "PlattScaler":
+        x = np.asarray(logits, dtype=np.float32).reshape(-1, 1)
+        y = np.asarray(labels, dtype=np.int32)
+        self.model.fit(x, y)
+        return self
+
+    def predict_proba(self, logits: np.ndarray) -> np.ndarray:
+        x = np.asarray(logits, dtype=np.float32).reshape(-1, 1)
+        return self.model.predict_proba(x)[:, 1].astype(np.float32)
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +415,94 @@ class TrustDataset(Dataset):
         if n_adv == 0:
             raise ValueError("No adversarial samples — check data generation.")
         return n_legit, n_adv, n_legit / n_adv
+
+    def sample_weights(self) -> np.ndarray:
+        """Per-example weights for balanced oversampling on the training split only."""
+        labels = np.array([int(lbl) for _, lbl in self.data], dtype=np.int32)
+        class_counts = np.bincount(labels, minlength=2).astype(np.float64)
+        class_counts = np.maximum(class_counts, 1.0)
+        weights = np.array([1.0 / class_counts[label] for label in labels], dtype=np.float64)
+        return weights
+
+
+def _normalize_feature_stats(feature_mean: np.ndarray, feature_std: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Normalize feature statistics into stable float32 row vectors."""
+    mean = np.asarray(feature_mean, dtype=np.float32)
+    std = np.asarray(feature_std, dtype=np.float32)
+    if mean.ndim == 1:
+        mean = mean.reshape(1, -1)
+    if std.ndim == 1:
+        std = std.reshape(1, -1)
+    safe_std = np.where(std < 1e-6, 1.0, std).astype(np.float32)
+    return mean.astype(np.float32), safe_std
+
+
+def _prepare_sequence_array(
+    sequence: np.ndarray,
+    expected_dim: int,
+) -> np.ndarray:
+    """Accept either base 5-D or enriched expected_dim features for inference."""
+    arr = np.asarray(sequence, dtype=np.float32)
+    if arr.ndim != 2:
+        raise ValueError(f"Expected sequence with shape (K, F), got ndim={arr.ndim}.")
+
+    if arr.shape[1] == expected_dim:
+        return arr
+
+    if arr.shape[1] == 5 and expected_dim == 30:
+        return _compute_temporal_features(arr).astype(np.float32)
+
+    raise ValueError(
+        f"Sequence feature dimension {arr.shape[1]} does not match expected "
+        f"input_dim {expected_dim}."
+    )
+
+
+def normalize_sequence_features(
+    sequence: np.ndarray,
+    feature_mean: Optional[np.ndarray],
+    feature_std: Optional[np.ndarray],
+) -> np.ndarray:
+    """Apply saved training normalization stats when available."""
+    arr = np.asarray(sequence, dtype=np.float32)
+    if feature_mean is None or feature_std is None:
+        return arr
+    mean, std = _normalize_feature_stats(feature_mean, feature_std)
+    if arr.shape[1] != mean.shape[1]:
+        raise ValueError(
+            f"Normalization stats expect {mean.shape[1]} features, got {arr.shape[1]}."
+        )
+    return ((arr - mean) / std).astype(np.float32)
+
+
+def save_preprocessing_stats(
+    checkpoint_dir: str,
+    feature_mean: np.ndarray,
+    feature_std: np.ndarray,
+) -> str:
+    """Persist training-time normalization stats for inference and simulation."""
+    mean, std = _normalize_feature_stats(feature_mean, feature_std)
+    payload = {
+        "feature_mean": mean.squeeze(0).tolist(),
+        "feature_std": std.squeeze(0).tolist(),
+    }
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    out_path = os.path.join(checkpoint_dir, "preprocessing_stats.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return out_path
+
+
+def load_preprocessing_stats(checkpoint_dir: str) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Load saved normalization stats if present."""
+    stats_path = os.path.join(checkpoint_dir, "preprocessing_stats.json")
+    if not os.path.exists(stats_path):
+        return None, None
+    with open(stats_path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    mean = np.asarray(payload["feature_mean"], dtype=np.float32).reshape(1, -1)
+    std = np.asarray(payload["feature_std"], dtype=np.float32).reshape(1, -1)
+    return _normalize_feature_stats(mean, std)
 
 
 # ---------------------------------------------------------------------------
@@ -474,6 +600,28 @@ def temperature_scale_logits(logits: torch.Tensor, temperature: float = 1.0) -> 
     return logits / temperature
 
 
+def expected_calibration_error(all_probs: np.ndarray, all_labels: np.ndarray, n_bins: int = 10) -> float:
+    """Equal-width ECE on binary adversarial probabilities."""
+    if len(all_labels) == 0:
+        return 0.0
+    ece = 0.0
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    for i in range(n_bins):
+        lo = bin_edges[i]
+        hi = bin_edges[i + 1]
+        if i == n_bins - 1:
+            in_bin = (all_probs >= lo) & (all_probs <= hi)
+        else:
+            in_bin = (all_probs >= lo) & (all_probs < hi)
+        if not np.any(in_bin):
+            continue
+        prob_mean = float(all_probs[in_bin].mean())
+        label_mean = float(all_labels[in_bin].mean())
+        weight = float(in_bin.mean())
+        ece += weight * abs(prob_mean - label_mean)
+    return float(ece)
+
+
 # ---------------------------------------------------------------------------
 # Threshold Sweeping
 # ---------------------------------------------------------------------------
@@ -506,9 +654,11 @@ def sweep_thresholds(
             - best_metrics_recall: dict of metrics at best recall threshold
     """
     if thresholds is None:
-        thresholds = list(np.arange(0.3, 0.91, 0.05))
+        thresholds = list(np.arange(0.05, 0.901, 0.01))
 
-    min_precision = 0.3
+    target_recall = 0.70
+    target_precision = 0.60
+    f1_tie_tolerance = 0.01
     
     results = {
         'thresholds': [],
@@ -516,51 +666,122 @@ def sweep_thresholds(
         'precisions': [],
         'recalls': [],
         'f1_scores': [],
+        'adjusted_f1_scores': [],
+        'fallback_scores': [],
     }
-    
-    for threshold in thresholds:
+
+    def _compute_metrics_at_threshold(threshold: float) -> Dict[str, float]:
         predictions = (all_probs > threshold).astype(np.float32)
-        
-        # Compute metrics
         accuracy = float((predictions == all_labels).mean())
+        tn = float(((predictions == 0) & (all_labels == 0)).sum())
         tp = float(((predictions == 1) & (all_labels == 1)).sum())
         fp = float(((predictions == 1) & (all_labels == 0)).sum())
         fn = float(((predictions == 0) & (all_labels == 1)).sum())
-        
+
         precision = tp / (tp + fp + 1e-8)
         recall = tp / (tp + fn + 1e-8)
         f1 = 2 * precision * recall / (precision + recall + 1e-8)
+        threshold_penalty = 0.02 * abs(float(threshold) - 0.5)
+        adjusted_f1 = f1 - threshold_penalty
+        fallback_score = (0.5 * f1) + (0.3 * recall) + (0.2 * precision) - threshold_penalty
+
+        return {
+            'threshold': float(threshold),
+            'accuracy': float(accuracy),
+            'tn': float(tn),
+            'tp': float(tp),
+            'fp': float(fp),
+            'fn': float(fn),
+            'precision': float(precision),
+            'recall': float(recall),
+            'f1': float(f1),
+            'adjusted_f1': float(adjusted_f1),
+            'fallback_score': float(fallback_score),
+        }
+    
+    for threshold in thresholds:
+        metrics = _compute_metrics_at_threshold(float(threshold))
         
         results['thresholds'].append(threshold)
-        results['accuracies'].append(accuracy)
-        results['precisions'].append(precision)
-        results['recalls'].append(recall)
-        results['f1_scores'].append(f1)
+        results['accuracies'].append(metrics['accuracy'])
+        results['precisions'].append(metrics['precision'])
+        results['recalls'].append(metrics['recall'])
+        results['f1_scores'].append(metrics['f1'])
+        results['adjusted_f1_scores'].append(metrics['adjusted_f1'])
+        results['fallback_scores'].append(metrics['fallback_score'])
     
-    # Find best thresholds with precision constraint to avoid degenerate selections.
-    valid_indices = [
-        i for i, precision in enumerate(results['precisions'])
-        if precision >= min_precision
+    valid_operating_points = [
+        i for i, (recall, precision) in enumerate(zip(results['recalls'], results['precisions']))
+        if recall >= target_recall and precision >= target_precision
     ]
-
-    if len(valid_indices) == 0:
-        msg = (
-            "Model collapse detected: no threshold satisfies precision constraint. "
-            "Check model outputs and training convergence."
+    operating_tolerance = 0.015
+    def _select_with_recall_tiebreak(candidate_indices: List[int], primary_scores: List[float]) -> int:
+        best_primary = max(primary_scores[i] for i in candidate_indices)
+        near_best_primary = [
+            i for i in candidate_indices
+            if primary_scores[i] >= (best_primary - operating_tolerance)
+        ]
+        best_f1 = max(results['f1_scores'][i] for i in near_best_primary)
+        f1_close_candidates = [
+            i for i in near_best_primary
+            if results['f1_scores'][i] >= (best_f1 - f1_tie_tolerance)
+        ]
+        return max(
+            f1_close_candidates,
+            key=lambda i: (results['recalls'][i], results['precisions'][i], -results['thresholds'][i]),
         )
-        warnings.warn(msg, RuntimeWarning, stacklevel=2)
-        raise RuntimeError(msg)
 
-    best_f1_idx = max(valid_indices, key=lambda i: results['f1_scores'][i])
-    best_recall_idx = max(valid_indices, key=lambda i: results['recalls'][i])
+    if valid_operating_points:
+        best_operating_idx = _select_with_recall_tiebreak(
+            valid_operating_points,
+            results['adjusted_f1_scores'],
+        )
+        selection_policy = "max_adjusted_f1_subject_to_recall>=0.70_and_precision>=0.60_with_f1_tie_break_to_higher_recall"
+    else:
+        all_points = list(range(len(results['thresholds'])))
+        best_operating_idx = _select_with_recall_tiebreak(
+            all_points,
+            results['fallback_scores'],
+        )
+        selection_policy = "max_fallback_score=0.5f1+0.3recall+0.2precision_with_threshold_penalty_and_f1_tie_break_to_higher_recall"
+
+    selected_metrics = _compute_metrics_at_threshold(float(results['thresholds'][best_operating_idx]))
+    if selected_metrics['recall'] < 0.65:
+        min_threshold = float(min(thresholds))
+        safety_threshold = max(min_threshold, selected_metrics['threshold'] - 0.05)
+        safety_metrics = _compute_metrics_at_threshold(safety_threshold)
+        if safety_metrics['f1'] >= (selected_metrics['f1'] - 0.02):
+            selected_metrics = safety_metrics
+            selection_policy += "+recall_safety_net_minus_0.05"
+
+    # Micro-adjust only conservative edge cases to recover recall without FP/F1 instability.
+    is_over_conservative = selected_metrics['precision'] >= 0.98 and selected_metrics['recall'] < 0.75
+    if is_over_conservative:
+        min_threshold = float(min(thresholds))
+        micro_threshold = max(min_threshold, selected_metrics['threshold'] - 0.03)
+        micro_metrics = _compute_metrics_at_threshold(micro_threshold)
+        f1_drop_ok = micro_metrics['f1'] >= (selected_metrics['f1'] - 0.015)
+        fp_increase_ok = micro_metrics['fp'] <= (selected_metrics['fp'] + 2.0)
+        if f1_drop_ok and fp_increase_ok:
+            selected_metrics = micro_metrics
+            selection_policy += "+micro_conservative_relax_minus_0.03"
+
+    best_f1_idx = max(
+        range(len(results['thresholds'])),
+        key=lambda i: (results['f1_scores'][i], results['recalls'][i], results['precisions'][i]),
+    )
+    best_recall_idx = max(range(len(results['thresholds'])), key=lambda i: (results['recalls'][i], results['f1_scores'][i]))
     
     best_threshold_f1 = results['thresholds'][best_f1_idx]
     best_threshold_recall = results['thresholds'][best_recall_idx]
     
     results['best_threshold_f1'] = best_threshold_f1
     results['best_threshold_recall'] = best_threshold_recall
-    results['precision_constraint_min'] = float(min_precision)
-    results['valid_threshold_count'] = int(len(valid_indices))
+    results['best_threshold_operating'] = selected_metrics['threshold']
+    results['target_recall'] = float(target_recall)
+    results['target_precision'] = float(target_precision)
+    results['valid_threshold_count'] = int(len(valid_operating_points))
+    results['selection_policy'] = selection_policy
     results['best_metrics_f1'] = {
         'threshold': best_threshold_f1,
         'accuracy': results['accuracies'][best_f1_idx],
@@ -574,6 +795,15 @@ def sweep_thresholds(
         'precision': results['precisions'][best_recall_idx],
         'recall': results['recalls'][best_recall_idx],
         'f1': results['f1_scores'][best_recall_idx],
+    }
+    results['best_metrics_operating'] = {
+        'threshold': selected_metrics['threshold'],
+        'accuracy': selected_metrics['accuracy'],
+        'precision': selected_metrics['precision'],
+        'recall': selected_metrics['recall'],
+        'f1': selected_metrics['f1'],
+        'adjusted_f1': selected_metrics['adjusted_f1'],
+        'fallback_score': selected_metrics['fallback_score'],
     }
     
     return results
@@ -733,6 +963,7 @@ def evaluate(
     fn = float(((all_preds == 0) & (all_labels == 1)).sum())
     precision = tp / (tp + fp + 1e-8)
     recall    = tp / (tp + fn + 1e-8)
+    f1 = 2 * precision * recall / (precision + recall + 1e-8)
 
     # Prediction diagnostics to detect collapse (all-positive / all-negative)
     fraction_predicted_positive = float((all_preds == 1).mean()) if len(all_preds) else 0.0
@@ -771,6 +1002,12 @@ def evaluate(
             weight = float(in_bin.mean())
             ece += weight * abs(prob_mean - label_mean)
 
+    roc_auc = float("nan")
+    pr_auc = float("nan")
+    if len(np.unique(all_labels)) > 1:
+        roc_auc = float(roc_auc_score(all_labels, all_probs))
+        pr_auc = float(average_precision_score(all_labels, all_probs))
+
     base_return = (total_loss / max(len(all_labels), 1), accuracy, precision, recall, float(ece), brier)
     
     # Optionally perform threshold sweep for optimal thresholds
@@ -782,10 +1019,175 @@ def evaluate(
         diagnostics = {
             "fraction_predicted_positive": float(fraction_predicted_positive),
             "fraction_predicted_negative": float(fraction_predicted_negative),
+            "tp": int(tp),
+            "tn": int(((all_preds == 0) & (all_labels == 0)).sum()),
+            "fp": int(fp),
+            "fn": int(fn),
+            "f1": float(f1),
+            "roc_auc": roc_auc,
+            "pr_auc": pr_auc,
+            "threshold_used": float(threshold),
         }
         return base_return + (diagnostics,)
     
     return base_return
+
+
+def collect_probabilities(
+    model: TrustTransformer,
+    loader: DataLoader,
+    temperature: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Collect calibrated adversarial probabilities and labels from a loader."""
+    model.eval()
+    all_probs: List[float] = []
+    all_labels: List[float] = []
+    with torch.no_grad():
+        for sequences, labels in loader:
+            logits = model(sequences)
+            probs = torch.sigmoid(temperature_scale_logits(logits, temperature))
+            all_probs.extend(probs.cpu().numpy().flatten().tolist())
+            all_labels.extend(labels.cpu().numpy().flatten().tolist())
+    return (
+        np.array(all_probs, dtype=np.float32),
+        np.array(all_labels, dtype=np.float32),
+    )
+
+
+def collect_logits(
+    model: TrustTransformer,
+    loader: DataLoader,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Collect raw logits and labels from a loader."""
+    model.eval()
+    all_logits: List[float] = []
+    all_labels: List[float] = []
+    with torch.no_grad():
+        for sequences, labels in loader:
+            logits = model(sequences)
+            all_logits.extend(logits.cpu().numpy().flatten().tolist())
+            all_labels.extend(labels.cpu().numpy().flatten().tolist())
+    return (
+        np.array(all_logits, dtype=np.float32),
+        np.array(all_labels, dtype=np.float32),
+    )
+
+
+def _fit_temperature_from_logits(
+    logits: np.ndarray,
+    labels: np.ndarray,
+    init_temperature: float,
+) -> float:
+    scaler = TemperatureScaler(init_temperature=init_temperature)
+    logits_tensor = torch.tensor(logits, dtype=torch.float32).view(-1, 1)
+    labels_tensor = torch.tensor(labels, dtype=torch.float32).view(-1, 1)
+    optimizer = torch.optim.LBFGS([scaler.temperature], lr=0.01, max_iter=25)
+    criterion = nn.BCEWithLogitsLoss()
+
+    def closure():
+        optimizer.zero_grad()
+        scaled_logits = scaler.forward(logits_tensor)
+        loss = criterion(scaled_logits, labels_tensor)
+        loss.backward()
+        return loss
+
+    optimizer.step(closure)
+    with torch.no_grad():
+        scaler.temperature.clamp_(min=0.25, max=10.0)
+    return float(scaler.temperature.item())
+
+
+def _cross_validated_calibration(
+    val_logits: np.ndarray,
+    val_labels: np.ndarray,
+    seed: int,
+    init_temperature: float,
+    n_splits: int = 3,
+) -> Dict[str, object]:
+    """Choose between temperature scaling and Platt scaling using validation-only CV."""
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    temp_oof = np.zeros_like(val_logits, dtype=np.float32)
+    platt_oof = np.zeros_like(val_logits, dtype=np.float32)
+
+    for fit_idx, holdout_idx in skf.split(val_logits.reshape(-1, 1), val_labels.astype(np.int32)):
+        fit_logits = val_logits[fit_idx]
+        fit_labels = val_labels[fit_idx]
+        holdout_logits = val_logits[holdout_idx]
+
+        temperature = _fit_temperature_from_logits(fit_logits, fit_labels, init_temperature=init_temperature)
+        temp_oof[holdout_idx] = torch.sigmoid(
+            temperature_scale_logits(
+                torch.tensor(holdout_logits, dtype=torch.float32).view(-1, 1),
+                temperature=temperature,
+            )
+        ).cpu().numpy().flatten()
+
+        platt = PlattScaler(seed=seed).fit(fit_logits, fit_labels)
+        platt_oof[holdout_idx] = platt.predict_proba(holdout_logits)
+
+    calibration_scores = {}
+    for method_name, probs in [("temperature", temp_oof), ("platt", platt_oof)]:
+        ece = expected_calibration_error(probs, val_labels)
+        brier = float(np.mean((probs - val_labels) ** 2))
+        calibration_scores[method_name] = {
+            "ece": float(ece),
+            "brier": float(brier),
+            "probs": probs,
+        }
+
+    selected_method = min(
+        calibration_scores.keys(),
+        key=lambda name: (calibration_scores[name]["ece"], calibration_scores[name]["brier"]),
+    )
+
+    if selected_method == "temperature":
+        fitted_temperature = _fit_temperature_from_logits(val_logits, val_labels, init_temperature=init_temperature)
+        final_calibrator = {
+            "method": "temperature",
+            "temperature": float(fitted_temperature),
+        }
+        final_val_probs = torch.sigmoid(
+            temperature_scale_logits(
+                torch.tensor(val_logits, dtype=torch.float32).view(-1, 1),
+                temperature=fitted_temperature,
+            )
+        ).cpu().numpy().flatten().astype(np.float32)
+    else:
+        fitted_platt = PlattScaler(seed=seed).fit(val_logits, val_labels)
+        final_calibrator = {
+            "method": "platt",
+            "model": fitted_platt,
+        }
+        final_val_probs = fitted_platt.predict_proba(val_logits)
+
+    return {
+        "selected_method": selected_method,
+        "cv_scores": {
+            name: {
+                "ece": float(score["ece"]),
+                "brier": float(score["brier"]),
+            }
+            for name, score in calibration_scores.items()
+        },
+        "selected_oof_probs": calibration_scores[selected_method]["probs"].astype(np.float32),
+        "final_calibrator": final_calibrator,
+        "final_val_probs": final_val_probs.astype(np.float32),
+    }
+
+
+def apply_calibrator_to_logits(logits: np.ndarray, calibrator: Dict[str, object]) -> np.ndarray:
+    """Apply the chosen validation-fit calibrator to logits."""
+    if calibrator["method"] == "temperature":
+        temperature = float(calibrator["temperature"])
+        return torch.sigmoid(
+            temperature_scale_logits(
+                torch.tensor(logits, dtype=torch.float32).view(-1, 1),
+                temperature=temperature,
+            )
+        ).cpu().numpy().flatten().astype(np.float32)
+    if calibrator["method"] == "platt":
+        return calibrator["model"].predict_proba(logits)
+    raise ValueError(f"Unsupported calibrator method: {calibrator['method']}")
 
 
 # ---------------------------------------------------------------------------
@@ -1003,6 +1405,19 @@ def train_model(
         val_frac=config["training"]["val_split"],
         seed=seed,
     )
+    hardening_cfg = config.get("training", {}).get("data_hardening", {})
+    train_data, hardening_report = harden_training_sequences(
+        train_data,
+        seed=seed,
+        enabled=bool(hardening_cfg.get("enabled", True)),
+        gaussian_sigma_frac=float(hardening_cfg.get("gaussian_sigma_frac", 0.10)),
+        overlap_alpha_low=float(hardening_cfg.get("overlap_alpha_low", 0.60)),
+        overlap_alpha_high=float(hardening_cfg.get("overlap_alpha_high", 0.90)),
+        label_flip_fraction=float(hardening_cfg.get("label_flip_fraction", 0.03)),
+        hard_duplicate_fraction=float(hardening_cfg.get("hard_duplicate_fraction", 0.08)),
+        feature_dropout_rate=float(hardening_cfg.get("feature_dropout_rate", 0.08)),
+        top_feature_fraction=float(hardening_cfg.get("top_feature_fraction", 0.08)),
+    )
 
     if verbose:
         n_adv_train = sum(1 for s in train_data if s["label"] == 1)
@@ -1015,6 +1430,11 @@ def train_model(
               f"{100*n_adv_val/len(val_data):.0f}%)")
         print(f"  Test:  {len(test_data):3d} ({n_adv_test} adv = "
               f"{100*n_adv_test/len(test_data):.0f}%)")
+        print(
+            f"  Hardened train: {hardening_report.n_original} -> {hardening_report.n_augmented} "
+            f"(label_flips={hardening_report.label_flip_count}, "
+            f"hard_duplicates={hardening_report.hard_sample_duplicates})"
+        )
 
     seq_len    = config["architecture"]["seq_len"]
     batch_size = config["training"]["batch_size"]
@@ -1038,6 +1458,8 @@ def train_model(
             seq, label = dataset.data[i]
             seq_normalized = (seq - feature_mean) / feature_std
             dataset.data[i] = (seq_normalized, label)
+
+    save_preprocessing_stats(checkpoint_dir, feature_mean, feature_std)
     
     if verbose:
         n_features = int(feature_std_raw.shape[1])
@@ -1088,8 +1510,23 @@ def train_model(
                       "class separability may be too weak for stable training.")
             print()
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                              drop_last=True)
+    oversample_minority = bool(config.get("training", {}).get("oversample_minority", True))
+    if oversample_minority:
+        sample_weights = torch.as_tensor(train_ds.sample_weights(), dtype=torch.double)
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(sample_weights),
+            replacement=True,
+        )
+        train_loader = DataLoader(
+            train_ds,
+            batch_size=batch_size,
+            sampler=sampler,
+            drop_last=True,
+        )
+    else:
+        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
+                                  drop_last=True)
     val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False)
     test_loader  = DataLoader(test_ds,  batch_size=batch_size, shuffle=False)
 
@@ -1104,6 +1541,7 @@ def train_model(
         print(f"  Dropout: {config['architecture']['dropout']}")
         print(f"  Label smoothing: {label_smoothing}")
         print(f"  Weight decay: {weight_decay:.1e}")
+        print(f"  Oversample minority: {oversample_minority}")
         print()
 
     # Use Focal Loss if requested, otherwise BCE with pos_weight
@@ -1140,17 +1578,20 @@ def train_model(
         optimizer, patience=5, factor=0.5
     )
 
-    best_val_acc   = 0.0
+    best_val_score = -1.0
     best_val_epoch = 0
     best_val_metrics = {
         "loss": None,
         "accuracy": None,
         "precision": None,
         "recall": None,
+        "f1": None,
         "ece": None,
         "brier": None,
     }
-    best_threshold_f1_val = None  # Store threshold selected on validation set
+    best_threshold_f1_val = None
+    best_threshold_operating_val = None
+    best_temperature = inference_temperature
     patience_count = 0
     patience       = config["training"]["early_stopping_patience"]
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -1178,6 +1619,22 @@ def train_model(
         # Extract best threshold from validation sweep
         if val_sweep and 'best_threshold_f1' in val_sweep:
             best_threshold_f1_val = val_sweep['best_threshold_f1']
+        if val_sweep and 'best_threshold_operating' in val_sweep:
+            current_threshold = float(val_sweep['best_threshold_operating'])
+        else:
+            current_threshold = float(best_threshold_f1_val if best_threshold_f1_val is not None else _adv_threshold(tau_min))
+
+        current_val_f1 = float(val_sweep.get('best_metrics_operating', {}).get('f1', 0.0)) if val_sweep else 0.0
+        current_val_recall = float(val_sweep.get('best_metrics_operating', {}).get('recall', 0.0)) if val_sweep else 0.0
+        current_val_precision = float(val_sweep.get('best_metrics_operating', {}).get('precision', 0.0)) if val_sweep else 0.0
+        current_val_adjusted_f1 = float(val_sweep.get('best_metrics_operating', {}).get('adjusted_f1', 0.0)) if val_sweep else 0.0
+        current_val_fallback = float(val_sweep.get('best_metrics_operating', {}).get('fallback_score', 0.0)) if val_sweep else 0.0
+        target_recall = float(val_sweep.get('target_recall', 0.70)) if val_sweep else 0.70
+        target_precision = float(val_sweep.get('target_precision', 0.60)) if val_sweep else 0.60
+        if current_val_recall >= target_recall and current_val_precision >= target_precision:
+            current_score = current_val_adjusted_f1
+        else:
+            current_score = current_val_fallback
         
         scheduler.step(val_loss)
 
@@ -1190,20 +1647,29 @@ def train_model(
                 f"Prec={val_prec:.4f} Rec={val_rec:.4f} "
                 f"ECE={val_ece:.4f} Brier={val_brier:.4f}"
             )
-            if best_threshold_f1_val:
-                print(f"         [Validation threshold sweep] Best F1 threshold: {best_threshold_f1_val:.3f}")
+            if val_sweep:
+                print(
+                    f"         [Validation operating point] threshold={current_threshold:.3f} "
+                    f"prec={current_val_precision:.4f} rec={current_val_recall:.4f} "
+                    f"f1={current_val_f1:.4f} adj_f1={current_val_adjusted_f1:.4f} "
+                    f"fallback={current_val_fallback:.4f}"
+                )
 
-        if val_acc > best_val_acc:
-            best_val_acc   = val_acc
+        if current_score > best_val_score:
+            best_val_score = current_score
             best_val_epoch = epoch
             best_val_metrics = {
                 "loss": float(val_loss),
                 "accuracy": float(val_acc),
-                "precision": float(val_prec),
-                "recall": float(val_rec),
+                "precision": current_val_precision,
+                "recall": current_val_recall,
+                "f1": current_val_f1,
+                "adjusted_f1": current_val_adjusted_f1,
+                "fallback_score": current_val_fallback,
                 "ece": float(val_ece),
                 "brier": float(val_brier),
             }
+            best_threshold_operating_val = current_threshold
             patience_count = 0
             torch.save(model.state_dict(),
                        os.path.join(checkpoint_dir, "best_model.pt"))
@@ -1212,7 +1678,7 @@ def train_model(
             if patience_count >= patience:
                 if verbose:
                     print(f"Early stopping at epoch {epoch} "
-                          f"(best val_acc={best_val_acc:.4f})")
+                          f"(best val_score={best_val_score:.4f})")
                 break
 
     # Test evaluation: Apply NO threshold sweep (prevents data leakage)
@@ -1221,64 +1687,170 @@ def train_model(
         torch.load(os.path.join(checkpoint_dir, "best_model.pt"),
                    weights_only=True)
     )
-    
+
+    calibration_enabled = bool(config.get("trust_scoring", {}).get("calibration_enabled", True))
+    if calibration_enabled:
+        val_logits, val_labels = collect_logits(model, val_loader)
+        calibration_result = _cross_validated_calibration(
+            val_logits=val_logits,
+            val_labels=val_labels,
+            seed=seed,
+            init_temperature=inference_temperature,
+            n_splits=3,
+        )
+        selected_calibrator = calibration_result["final_calibrator"]
+        best_temperature = (
+            float(selected_calibrator["temperature"])
+            if selected_calibrator["method"] == "temperature"
+            else float(inference_temperature)
+        )
+        calibrated_sweep = sweep_thresholds(
+            calibration_result["selected_oof_probs"],
+            val_labels,
+            tau_min=tau_min,
+        )
+        calibrated_metrics = calibrated_sweep.get("best_metrics_operating", {})
+        selected_threshold = float(calibrated_sweep.get("best_threshold_operating", _adv_threshold(tau_min)))
+        best_operating_point = {
+            "threshold": selected_threshold,
+            "source": f"validation_3fold_{calibration_result['selected_method']}",
+            "score": float(
+                calibrated_metrics.get("adjusted_f1", 0.0)
+                if calibrated_metrics.get("recall", 0.0) >= 0.75 and calibrated_metrics.get("precision", 0.0) >= 0.60
+                else calibrated_metrics.get("fallback_score", 0.0)
+            ),
+            "calibration_scores": calibration_result["cv_scores"],
+            "calibration_method": calibration_result["selected_method"],
+        }
+    else:
+        selected_threshold = (
+            float(best_threshold_operating_val)
+            if best_threshold_operating_val is not None
+            else float(best_threshold_f1_val if best_threshold_f1_val is not None else _adv_threshold(tau_min))
+        )
+        best_temperature = float(inference_temperature)
+        selected_calibrator = {"method": "temperature", "temperature": best_temperature}
+        best_operating_point = {
+            "threshold": selected_threshold,
+            "source": "uncalibrated_validation_selection",
+            "score": float(
+                best_val_metrics.get("adjusted_f1", 0.0)
+                if best_val_metrics.get("recall", 0.0) >= 0.75 and best_val_metrics.get("precision", 0.0) >= 0.60
+                else best_val_metrics.get("fallback_score", 0.0)
+            ),
+            "calibration_scores": {},
+            "calibration_method": "none",
+        }
+
     # Evaluate test set with FIXED threshold from validation (no sweep on test)
-    eval_result = evaluate(
-        model,
-        test_loader,
-        criterion,
-        tau_min=tau_min,
-        temperature=inference_temperature,
-        custom_threshold=best_threshold_f1_val,  # Apply validation-selected threshold
-        sweep_thresholds_flag=False,  # NO sweep on test set (data leakage prevention)
-        return_diagnostics=True,
-    )
-    
-    # Unpack test results (no sweep results from test)
-    test_loss, test_acc, test_prec, test_rec, test_ece, test_brier, test_diagnostics = eval_result
-    test_sweep_results = {}  # No sweep on test set
-    
+    model.eval()
+    test_total_loss: float = 0.0
+    test_logits_batches: List[torch.Tensor] = []
+    test_labels_batches: List[torch.Tensor] = []
+    with torch.no_grad():
+        for sequences, labels in test_loader:
+            logits = model(sequences)
+            loss = criterion(logits, labels)
+            test_total_loss += loss.item() * sequences.size(0)
+            test_logits_batches.append(logits.cpu())
+            test_labels_batches.append(labels.cpu())
+
+    test_logits = torch.cat(test_logits_batches, dim=0).numpy().flatten().astype(np.float32)
+    test_labels = torch.cat(test_labels_batches, dim=0).numpy().flatten().astype(np.float32)
+    test_probs = apply_calibrator_to_logits(test_logits, selected_calibrator)
+    test_predictions = (test_probs > selected_threshold).astype(np.float32)
+    test_acc = float((test_predictions == test_labels).mean())
+    tp = int(((test_predictions == 1) & (test_labels == 1)).sum())
+    tn = int(((test_predictions == 0) & (test_labels == 0)).sum())
+    fp = int(((test_predictions == 1) & (test_labels == 0)).sum())
+    fn = int(((test_predictions == 0) & (test_labels == 1)).sum())
+    test_prec = tp / (tp + fp + 1e-8)
+    test_rec = tp / (tp + fn + 1e-8)
     f1 = (2 * test_prec * test_rec) / (test_prec + test_rec + 1e-8)
+    test_loss = test_total_loss / max(len(test_labels), 1)
+    test_ece = expected_calibration_error(test_probs, test_labels)
+    test_brier = float(np.mean((test_probs - test_labels) ** 2))
+    test_diagnostics = {
+        "fraction_predicted_positive": float((test_predictions == 1).mean()) if len(test_predictions) else 0.0,
+        "fraction_predicted_negative": float((test_predictions == 0).mean()) if len(test_predictions) else 0.0,
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "f1": float(f1),
+        "roc_auc": float(roc_auc_score(test_labels, test_probs)) if len(np.unique(test_labels)) > 1 else float("nan"),
+        "pr_auc": float(average_precision_score(test_labels, test_probs)) if len(np.unique(test_labels)) > 1 else float("nan"),
+        "threshold_used": float(selected_threshold),
+    }
+
+    print(f"Predicted positive rate: {test_diagnostics['fraction_predicted_positive'] * 100:.1f}%")
+    print(f"Predicted negative rate: {test_diagnostics['fraction_predicted_negative'] * 100:.1f}%")
+    if test_diagnostics["fraction_predicted_positive"] > 0.90 or test_diagnostics["fraction_predicted_positive"] < 0.10:
+        print("[WARNING] Prediction collapse detected: predicted positive rate is extreme "
+              "(>90% or <10%).")
 
     if verbose:
         print(f"\n{'='*60}")
         print(f"  TEST RESULTS (Using threshold from validation set)")
         print(f"{'='*60}")
-        print(f"  Threshold applied: {best_threshold_f1_val:.3f} (selected on validation)")
+        print(f"  Threshold applied: {selected_threshold:.3f} (selected on validation)")
+        print(f"  Temperature      : {best_temperature:.3f}")
+        print(f"  Selection source : {best_operating_point['source']}")
         print(f"  {'-'*60}")
         print(f"  Accuracy  : {test_acc:.4f}  ({test_acc*100:.1f}%)")
         print(f"  Precision : {test_prec:.4f}")
         print(f"  Recall    : {test_rec:.4f}")
         print(f"  F1        : {f1:.4f}")
+        print(f"  ROC-AUC   : {test_diagnostics.get('roc_auc', float('nan')):.4f}")
+        print(f"  PR-AUC    : {test_diagnostics.get('pr_auc', float('nan')):.4f}")
         print(f"  ECE       : {test_ece:.4f}")
         print(f"  Brier     : {test_brier:.4f}")
+        print(f"  Confusion : TP={test_diagnostics.get('tp')} TN={test_diagnostics.get('tn')} FP={test_diagnostics.get('fp')} FN={test_diagnostics.get('fn')}")
         print(f"{'='*60}")
 
     metrics_payload = {
         "metadata": {
             "approach": "Threshold sweep on validation set, applied to test set",
-            "note": "Prevents data leakage: threshold selected on validation ONLY"
+            "note": "Prevents data leakage: threshold and temperature selected on validation ONLY"
+        },
+        "data_hardening": {
+            "n_original": int(hardening_report.n_original),
+            "n_augmented": int(hardening_report.n_augmented),
+            "class_counts_before": hardening_report.class_counts_before,
+            "class_counts_after": hardening_report.class_counts_after,
+            "label_flip_count": int(hardening_report.label_flip_count),
+            "hard_sample_duplicates": int(hardening_report.hard_sample_duplicates),
+            "gaussian_noise_sigma_frac": float(hardening_report.gaussian_noise_sigma_frac),
+            "overlap_alpha_range": list(hardening_report.overlap_alpha_range),
+            "feature_dropout_rate": float(hardening_report.feature_dropout_rate),
         },
         "best_validation": {
             "epoch": int(best_val_epoch),
             **best_val_metrics,
         },
         "test": {
-            "threshold_used": float(best_threshold_f1_val) if best_threshold_f1_val else float(_adv_threshold(tau_min)),
+            "threshold_used": float(selected_threshold),
             "loss": float(test_loss),
             "accuracy": float(test_acc),
             "precision": float(test_prec),
             "recall": float(test_rec),
             "f1": float(f1),
+            "roc_auc": float(test_diagnostics.get("roc_auc", float("nan"))),
+            "pr_auc": float(test_diagnostics.get("pr_auc", float("nan"))),
             "ece": float(test_ece),
             "brier": float(test_brier),
         },
         "test_diagnostics": {
             "fraction_predicted_positive": float(test_diagnostics.get("fraction_predicted_positive", 0.0)),
             "fraction_predicted_negative": float(test_diagnostics.get("fraction_predicted_negative", 0.0)),
+            "tp": int(test_diagnostics.get("tp", 0)),
+            "tn": int(test_diagnostics.get("tn", 0)),
+            "fp": int(test_diagnostics.get("fp", 0)),
+            "fn": int(test_diagnostics.get("fn", 0)),
         },
         "calibration": {
-            "temperature": float(inference_temperature),
+            "temperature": float(best_temperature),
+            "selection_source": best_operating_point["source"],
             "ece_bins": 10,
         },
     }
@@ -1288,9 +1860,10 @@ def train_model(
 
     # Output distribution validation
     if verbose:
+        validation_probe_sequences = (val_data + test_data)[: min(len(val_data) + len(test_data), 150)]
         validate_output_distribution(
             model,
-            sequences[:100],
+            validation_probe_sequences,
             seq_len,
             tau_min=tau_min,
             temperature=inference_temperature,
@@ -1320,6 +1893,10 @@ def load_model(
     use_quant = bool(quantized and quant_cfg.get("enabled", False))
     if use_quant:
         model = quantize_model(model)
+    checkpoint_dir = os.path.dirname(checkpoint_path) or "."
+    feature_mean, feature_std = load_preprocessing_stats(checkpoint_dir)
+    model.feature_mean = feature_mean
+    model.feature_std = feature_std
     model.eval()
     return model
 
@@ -1343,9 +1920,16 @@ def compute_trust_score(
     Compute trust score: trust = 1 - sigmoid(logit)  in [0,1].
     HIGH → legitimate. LOW → anomalous (flag when < tau_min=0.65).
     """
+    expected_dim = int(getattr(model, "input_dim", np.asarray(sequence).shape[1]))
+    seq_prepared = _prepare_sequence_array(sequence, expected_dim=expected_dim)
+    seq_prepared = normalize_sequence_features(
+        seq_prepared,
+        getattr(model, "feature_mean", None),
+        getattr(model, "feature_std", None),
+    )
     model.eval()
     with torch.no_grad():
-        x     = torch.from_numpy(sequence.astype(np.float32)).unsqueeze(0)
+        x     = torch.from_numpy(seq_prepared.astype(np.float32)).unsqueeze(0)
         logit = model(x)
         trust = 1.0 - torch.sigmoid(temperature_scale_logits(logit, temperature))
     return float(trust.squeeze())
@@ -1357,9 +1941,24 @@ def compute_trust_batch(
     temperature: float = 1.5,
 ) -> np.ndarray:
     """Compute trust scores for a batch (N, K, 5) → (N,)."""
+    batch = np.asarray(sequences, dtype=np.float32)
+    if batch.ndim != 3:
+        raise ValueError(f"Expected batch with shape (N, K, F), got ndim={batch.ndim}.")
+    expected_dim = int(getattr(model, "input_dim", batch.shape[2]))
+    prepared = np.stack(
+        [
+            normalize_sequence_features(
+                _prepare_sequence_array(seq, expected_dim=expected_dim),
+                getattr(model, "feature_mean", None),
+                getattr(model, "feature_std", None),
+            )
+            for seq in batch
+        ],
+        axis=0,
+    ).astype(np.float32)
     model.eval()
     with torch.no_grad():
-        x      = torch.from_numpy(sequences.astype(np.float32))
+        x      = torch.from_numpy(prepared)
         logits = model(x)
         trust  = 1.0 - torch.sigmoid(temperature_scale_logits(logits, temperature))
     return trust.squeeze(-1).numpy()
