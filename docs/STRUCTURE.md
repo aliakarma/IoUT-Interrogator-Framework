@@ -1,84 +1,93 @@
-# Repository Structure
+﻿# Repository Structure
 
-```
+```text
 IoUT-Interrogator-Framework/
-│
-├── README.md                        # Project overview, key results, quick start
-├── requirements.txt                 # Python dependencies (pinned versions)
-├── Dockerfile                       # Reproducible Docker environment
-├── .gitignore                       # Git ignore rules
-├── CITATION.cff                     # Machine-readable citation metadata
-├── LICENSE                          # MIT License
-│
-├── data/
-│   ├── raw/
-│   │   ├── behavioral_sequences.json  # Generated: 500 agent sequences (K=64, d=5)
-│   │   └── labels.csv                 # Generated: agent labels and attack types
-│   ├── processed/
-│   │   └── trust_scores.csv           # Generated: per-agent trust scores from inference
-│   └── sample/
-│       └── sample_sequences.json      # 10 pre-generated sequences for quick demos
-│
-├── simulation/
-│   ├── configs/
-│   │   └── simulation_params.json     # All simulation hyperparameters
-│   ├── scripts/
-│   │   ├── environment.py             # IoUT multi-agent simulation environment
-│   │   ├── run_simulation.py          # Multi-run simulation orchestrator
-│   │   └── generate_behavioral_data.py# Synthetic behavioral sequence generator
-│   └── outputs/
-│       └── results.csv                # Generated: aggregated simulation results
-│
-├── model/
-│   ├── configs/
-│   │   └── transformer_config.json    # Model architecture and training config
-│   ├── inference/
-│   │   ├── transformer_model.py       # TrustTransformer PyTorch model + dataset
-│   │   ├── train.py                   # Training script (CLI entry point)
-│   │   └── infer.py                   # Inference script (CLI entry point)
-│   └── checkpoints/
-│       └── best_model.pt              # Generated: trained model checkpoint
-│
-├── blockchain/
-│   ├── configs/
-│   │   └── consortium_config.json     # Hyperledger Fabric consortium config template
-│   ├── chaincode/
-│   │   └── trust_ledger.go            # Go smart contract for trust evidence storage
-│   └── scripts/
-│       └── mock_ledger.py             # Runnable Python mock of PBFT consortium
-│
-├── analysis/
-│   ├── plot_trust_accuracy.py         # Figure 4 reproduction
-│   ├── plot_energy.py                 # Figure 5 reproduction
-│   ├── plot_pdr.py                    # Figure 6 reproduction
-│   ├── plot_ablation.py               # Ablation study bar chart
-│   ├── plot_all.py                    # Master script: generates all figures
-│   ├── statistical_summary.py         # Summary statistics table generator
-│   ├── plots/                         # Generated: PNG figures
-│   └── stats/                         # Generated: CSV summary tables
-│
-├── notebooks/
-│   ├── 01_trust_inference_demo.ipynb  # Colab: model training and inference demo
-│   ├── 02_simulation_analysis.ipynb   # Colab: simulation run and figure reproduction
-│   ├── 03_blockchain_demo.ipynb       # Colab: PBFT ledger demo
-│   └── 04_ablation_study.ipynb        # Colab: ablation study reproduction
-│
-├── scripts/
-│   ├── run_full_pipeline.py           # One-command pipeline (data → figures)
-│   └── reproduce_all.py               # Exact paper reproduction (30 runs)
-│
-├── tests/
-│   ├── test_environment.py            # Unit tests: simulation environment
-│   ├── test_model.py                  # Unit tests: transformer trust model
-│   └── test_blockchain.py             # Unit tests: mock PBFT ledger
-│
-├── docs/
-│   ├── REPRODUCIBILITY.md             # Step-by-step reproduction guide
-│   └── STRUCTURE.md                   # This file
-│
-└── .github/
-    └── workflows/
-        └── ci.yml                     # GitHub Actions CI pipeline
+|-- README.md                          # Project overview and reproducibility entrypoint
+|-- requirements.txt                   # Python dependencies (pinned versions)
+|-- Dockerfile                         # Reproducible Docker environment
+|-- .gitignore                         # Git ignore rules
+|-- CITATION.cff                       # Machine-readable citation metadata
+|-- LICENSE                            # MIT License
+|-- compat.py                          # Python version guard used by entry scripts
+|-- data/
+|   |-- raw/                           # Generated behavioral sequences and labels
+|   |-- processed/
+|   |   `-- trust_scores.csv           # Inference output trust scores
+|   `-- sample/
+|       `-- sample_sequences.json      # Demo input for inference pipeline
+|-- simulation/
+|   |-- configs/
+|   |   `-- simulation_params.json     # Simulation hyperparameters
+|   |-- scripts/
+|   |   |-- environment.py             # IoUT multi-agent environment
+|   |   |-- run_simulation.py          # Simulation orchestrator
+|   |   `-- generate_behavioral_data.py# Synthetic sequence generator
+|   `-- outputs/
+|       |-- results.csv                # Aggregated interval-level metrics
+|       |-- raw_results.csv            # Long-format run-level metrics
+|       `-- multi_seed_raw_results.csv # Multi-seed long-format metrics
+|-- model/
+|   |-- configs/
+|   |   `-- transformer_config.json    # Model architecture and training config
+|   |-- inference/
+|   |   |-- transformer_model.py       # TrustTransformer model definition
+|   |   |-- train.py                   # Training entrypoint
+|   |   |-- infer.py                   # Inference entrypoint
+|   |   |-- baseline_models.py         # Classical model baselines
+|   |   |-- lstm_baseline.py           # LSTM baseline implementation
+|   |   `-- data_hardening.py          # Data hardening utilities
+|   `-- checkpoints/
+|       `-- best_model.pt              # Generated trained checkpoint
+|-- blockchain/
+|   |-- configs/
+|   |   `-- consortium_config.json     # Consortium configuration template
+|   |-- chaincode/
+|   |   `-- trust_ledger.go            # Smart contract template
+|   `-- scripts/
+|       `-- mock_ledger.py             # Python mock PBFT ledger
+|-- analysis/
+|   |-- plot_trust_accuracy.py         # Trust accuracy plotting
+|   |-- plot_energy.py                 # Energy plotting
+|   |-- plot_pdr.py                    # PDR plotting
+|   |-- plot_ablation.py               # Ablation plotting
+|   |-- plot_calibration.py            # Calibration plotting
+|   |-- plot_ood_results.py            # OOD result plotting
+|   |-- plot_all.py                    # Generate all core plots
+|   |-- sensitivity_study.py           # Threshold/sequence sensitivity pipeline
+|   |-- statistical_summary.py         # Statistical summary generation
+|   |-- plots/                         # Generated PNG figures
+|   |-- stats/                         # Generated CSV summary tables
+|   |-- final_results/                 # Exported publication-ready result tables
+|   |-- smoke/                         # Smoke run artifacts
+|   |-- smoke_hardened/                # Hardened smoke artifacts
+|   `-- smoke_*/                       # Additional smoke variant artifacts
+|-- notebooks/
+|   |-- 01_trust_inference_demo.ipynb  # Model training and inference demo
+|   |-- 02_simulation_analysis.ipynb   # Simulation and metrics analysis demo
+|   |-- 03_blockchain_demo.ipynb       # Blockchain mock ledger demo
+|   |-- 04_ablation_study.ipynb        # Ablation study demo
+|   `-- 05_enhancements_validation.ipynb # Hardened/tuned enhancements validation
+|-- scripts/
+|   |-- run_full_pipeline.py           # End-to-end pipeline
+|   |-- reproduce_all.py               # Reproduction wrapper
+|   |-- run_multi_seed_experiments.py  # Multi-seed experiment runner
+|   |-- run_ablation_study.py          # Ablation execution helper
+|   |-- run_ood_evaluation.py          # OOD evaluation helper
+|   |-- smoke_validate_classifier.py   # Smoke validation checks
+|   |-- profile_inference.py           # Inference profiling utility
+|   `-- export_all_results.py          # Export consolidated results package
+|-- tests/
+|   |-- test_environment.py            # Simulation environment tests
+|   |-- test_model.py                  # Model and training tests
+|   `-- test_blockchain.py             # Mock ledger tests
+|-- docs/
+|   |-- REPRODUCIBILITY.md             # Reproduction instructions
+|   |-- CHANGELOG.md                   # Repository changelog
+|   |-- THRESHOLD_SWEEP_AND_FOCAL_LOSS.md # Threshold/focal-loss experiment notes
+|   `-- STRUCTURE.md                   # This file
+`-- .github/
+    `-- workflows/
+        `-- ci.yml                     # GitHub Actions CI pipeline
 ```
 
 ---
@@ -90,25 +99,26 @@ IoUT-Interrogator-Framework/
 The paper's prototype uses NS-3 Aqua-Sim and Hyperledger Fabric for simulation and
 blockchain governance, respectively. These systems require complex installation
 and are not easily reproducible in standard Python environments. This repository
-provides a **Python reimplementation artifact** that:
+provides a Python reimplementation artifact that:
 
-1. Preserve the core acoustic channel physics (Thorp model, energy equations)
-2. Implement the same behavioral metadata generation logic
-3. Simulate PBFT consensus with the same fault-tolerance parameters
-4. Produces traceable, reproducible outputs for this Python pipeline
+1. Preserves core acoustic-channel behavior and trust dynamics.
+2. Implements behavioral metadata generation with reproducible seeds.
+3. Simulates consortium-style ledger behavior using a mock PBFT flow.
+4. Produces traceable outputs for this Python pipeline.
 
 ### Data Flow
 
-```
-generate_behavioral_data.py
-    ↓ data/raw/behavioral_sequences.json
+```text
+simulation/scripts/generate_behavioral_data.py
+  -> data/raw/behavioral_sequences.json + data/raw/labels.csv
 model/inference/train.py
-    ↓ model/checkpoints/best_model.pt
-model/inference/infer.py           simulation/scripts/run_simulation.py
-    ↓                                   ↓
-data/processed/trust_scores.csv    simulation/outputs/results.csv
-                                        ↓
-                               analysis/plot_all.py
-                                        ↓
-                               analysis/plots/*.png
+  -> model/checkpoints/best_model.pt
+model/inference/infer.py
+  -> data/processed/trust_scores.csv
+simulation/scripts/run_simulation.py
+  -> simulation/outputs/results.csv + simulation/outputs/raw_results.csv
+analysis/statistical_summary.py
+  -> analysis/stats/summary_table.csv
+scripts/export_all_results.py
+  -> analysis/final_results/*.csv + analysis/final_results/provenance_manifest.json
 ```

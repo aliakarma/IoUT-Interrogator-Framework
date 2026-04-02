@@ -104,12 +104,12 @@ evaluation_setup:
 
 | Metric | Static Trust | Bayesian Trust | **Proposed (Ours)** |
 |--------|:-----------:|:--------------:|:-------------------:|
-| Detection Accuracy (%) | 86.00 ± 0.00 | 78.71 ± 8.19 | **91.87 ± 4.96** |
-| Precision (%) | 0.00 ± 0.00 | 44.99 ± 15.62 | **72.39 ± 18.34** |
-| Recall (%) | 0.00 ± 0.00 | 58.52 ± 20.26 | **76.69 ± 12.50** |
-| F1 Score (%) | 0.00 ± 0.00 | 46.61 ± 13.15 | **70.32 ± 13.14** |
-| Packet Delivery Ratio (%) | 91.59 ± 3.85 | 92.31 ± 3.71 | **92.39 ± 3.75** |
-| Residual Energy (%) | **75.33 ± 0.05** | 73.95 ± 0.06 | 73.87 ± 0.05 |
+| Detection Accuracy (%) | 86.00 +- 0.00 | 72.03 +- 4.84 | **90.74 +- 1.58** |
+| Precision (%) | 0.00 +- 0.00 | 26.75 +- 8.88 | **83.21 +- 10.05** |
+| Recall (%) | 0.00 +- 0.00 | **46.60 +- 13.20** | 33.95 +- 11.25 |
+| F1 Score (%) | 0.00 +- 0.00 | 32.45 +- 9.80 | **46.03 +- 11.60** |
+| Packet Delivery Ratio (%) | **91.59 +- 0.88** | 82.73 +- 1.74 | 90.46 +- 1.24 |
+| Energy Metric (%) | 73.08 +- 0.11 | 71.71 +- 0.11 | 71.38 +- 0.13 |
 
 <details>
 <summary><strong>Key findings</strong></summary>
@@ -117,16 +117,18 @@ evaluation_setup:
 <br>
 
 1. **Static trust fails entirely** at adversarial detection (F1 = 0.00), confirming that fixed thresholds cannot generalize.
-2. **Temporal modeling significantly improves performance** across all detection metrics compared to both baselines.
-3. **Communication reliability (PDR)** remains comparable across methods, confirming low interference from the trust layer.
-4. **Energy overhead is modest** relative to baseline approaches (~1.5% additional consumption).
-5. **The proposed method achieves the best trade-off** between detection accuracy and system efficiency.
+2. **The proposed transformer model** achieves the strongest overall detection profile (best accuracy, precision, and F1).
+3. **Bayesian trust has the highest recall**, while the proposed model prioritizes fewer false positives.
+4. **Network reliability remains high** for static and proposed approaches (PDR > 90%).
+5. **All values are generated from 30 seeded runs** using the reproducibility pipeline.
 
 **Source files:**
 - `simulation/outputs/results.csv` — Aggregated interval-level metrics for the active run
 - `simulation/outputs/raw_results.csv` — Long-format raw run-level metrics used for summary tables
 - `analysis/stats/summary_table.csv` — Aggregated statistics
-- `analysis/plot_*.py` — Visualization scripts
+- `analysis/final_results/main_metrics.csv` — Publication-ready headline metrics
+- `analysis/final_results/combined_results_table.csv` — Consolidated baseline/model comparison table
+- `analysis/final_results/provenance_manifest.json` — SHA256 + artifact provenance metadata
 
 </details>
 
@@ -153,7 +155,8 @@ Expected outputs:
 
 - Sample trust inference results
 - Evaluation plots → `analysis/plots/`
-- Environment validation log
+- Statistics tables → `analysis/stats/`
+- Exported result package → `analysis/final_results/`
 
 ### 3 · Full Reproducible Evaluation
 
@@ -165,7 +168,7 @@ python scripts/reproduce_all.py --seed 42 --runs 30
 python analysis/sensitivity_study.py --runs 20 --intervals 20 --seed 42
 
 # View aggregated results
-cat analysis/stats/summary_table.csv
+python -c "import pandas as pd; print(pd.read_csv('analysis/stats/summary_table.csv').head(20).to_string(index=False))"
 ```
 
 <details>
@@ -226,6 +229,7 @@ All notebooks are fully compatible with **Google Colab** — no local setup requ
 | 02 | `simulation_analysis` | Performance metrics, baseline comparisons, statistical tests | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/02_simulation_analysis.ipynb) |
 | 03 | `blockchain_demo` | Conceptual trust governance and blockchain integration flow | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/03_blockchain_demo.ipynb) |
 | 04 | `ablation_study` | Component sensitivity, parameter tuning, ablation analysis | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/04_ablation_study.ipynb) |
+| 05 | `enhancements_validation` | Validation of hardened settings and post-tuning enhancements | [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aliakarma/IoUT-Interrogator-Framework/blob/main/notebooks/05_enhancements_validation.ipynb) |
 
 <details>
 <summary><strong>Local Jupyter setup</strong></summary>
@@ -245,91 +249,92 @@ jupyter notebook notebooks/
 ## 🗂️ Repository Structure
 
 <details open>
-<summary><strong>Full directory tree</strong></summary>
+<summary><strong>Repository map (aligned to current main branch)</strong></summary>
 
 <br>
 
 ```
 IoUT-Interrogator-Framework/
 │
-├── simulation/                        # Behavioral Simulation Environment
-│   ├── configs/
-│   │   └── simulation_params.json     # Simulation hyperparameters
-│   ├── scripts/
-│   │   ├── environment.py             # IoUT environment implementation
-│   │   ├── generate_behavioral_data.py  # Synthetic AR(1) data generation
-│   │   └── run_simulation.py          # Simulation executor
-│   └── outputs/
-│       ├── results.csv                # Aggregated performance metrics
-│       └── results_*.csv              # Per-run detailed results
+├── analysis/                          # Evaluation, statistics, and packaged outputs
+│   ├── final_results/                 # Publication-ready consolidated result files
+│   ├── plots/                         # Generated plots (PNG)
+│   ├── smoke*/                        # Smoke and hardened experiment snapshots
+│   ├── stats/                         # Statistical tables (CSV)
+│   ├── plot_ablation.py
+│   ├── plot_all.py
+│   ├── plot_calibration.py
+│   ├── plot_energy.py
+│   ├── plot_ood_results.py
+│   ├── plot_pdr.py
+│   ├── plot_trust_accuracy.py
+│   ├── sensitivity_study.py
+│   └── statistical_summary.py
 │
-├── model/                             # Transformer-Based Trust Model
-│   ├── configs/
-│   │   └── transformer_config.json    # Model architecture & hyperparameters
-│   ├── checkpoints/
-│   │   └── best_model.pt              # Trained model weights
-│   └── inference/
-│       ├── transformer_model.py       # Transformer architecture definition
-│       ├── train.py                   # Model training pipeline
-│       ├── infer.py                   # Inference and trust scoring
-│       └── __init__.py
+├── blockchain/                        # Conceptual governance module
+│   ├── chaincode/trust_ledger.go
+│   ├── configs/consortium_config.json
+│   └── scripts/mock_ledger.py
 │
-├── analysis/                          # Evaluation & Visualization
-│   ├── plots/                         # Generated evaluation figures
-│   ├── stats/
-│   │   ├── summary_table.csv          # Aggregated results across runs
-│   │   ├── threshold_sensitivity.csv  # Sensitivity analysis outputs
-│   │   └── sequence_length_ablation.csv
-│   ├── plot_*.py                      # Individual plot generation scripts
-│   ├── sensitivity_study.py           # Threshold and ablation analysis
-│   ├── statistical_summary.py         # Statistical computation
-│   └── __init__.py
-│
-├── blockchain/                        # Conceptual Governance Module
-│   ├── configs/
-│   │   └── consortium_config.json     # Blockchain network configuration
-│   ├── scripts/
-│   │   └── mock_ledger.py             # Simulated blockchain ledger
-│   ├── chaincode/
-│   │   └── trust_ledger.go            # Smart contract template (Hyperledger)
-│   └── __init__.py
-│
-├── data/                              # Datasets
+├── data/                              # Raw, sample, and processed data
 │   ├── raw/
-│   │   ├── behavioral_sequences.json  # Raw behavioral data
-│   │   └── labels.csv                 # Ground truth agent labels
-│   ├── processed/
-│   │   ├── trust_scores.csv           # Processed trust inference outputs
-│   │   └── trust_scores_only_legit.csv
-│   └── sample/
-│       └── sample_sequences.json      # Sample data for quick testing
+│   ├── sample/sample_sequences.json
+│   └── processed/trust_scores.csv
 │
-├── scripts/                           # Execution Pipelines
-│   ├── run_full_pipeline.py           # End-to-end: simulation → training → eval
-│   ├── reproduce_all.py               # Reproducible evaluation with seed management
-│   └── __init__.py
+├── model/                             # Transformer model + baseline components
+│   ├── checkpoints/
+│   ├── configs/transformer_config.json
+│   └── inference/
+│       ├── baseline_models.py
+│       ├── data_hardening.py
+│       ├── infer.py
+│       ├── lstm_baseline.py
+│       ├── train.py
+│       └── transformer_model.py
 │
-├── tests/                             # Unit & Integration Tests
+├── simulation/                        # Behavioral simulation environment
+│   ├── configs/simulation_params.json
+│   ├── scripts/
+│   │   ├── environment.py
+│   │   ├── generate_behavioral_data.py
+│   │   └── run_simulation.py
+│   └── outputs/
+│       ├── results.csv
+│       ├── raw_results.csv
+│       └── multi_seed_raw_results.csv
+│
+├── scripts/                           # Main CLI entry points
+│   ├── run_full_pipeline.py
+│   ├── reproduce_all.py
+│   ├── run_multi_seed_experiments.py
+│   ├── run_ablation_study.py
+│   ├── run_ood_evaluation.py
+│   ├── smoke_validate_classifier.py
+│   ├── profile_inference.py
+│   └── export_all_results.py
+│
+├── tests/                             # Unit and integration tests
 │   ├── test_environment.py
 │   ├── test_model.py
-│   ├── test_blockchain.py
-│   └── __init__.py
+│   └── test_blockchain.py
 │
-├── notebooks/                         # Interactive Jupyter Notebooks
+├── notebooks/
 │   ├── 01_trust_inference_demo.ipynb
 │   ├── 02_simulation_analysis.ipynb
 │   ├── 03_blockchain_demo.ipynb
-│   └── 04_ablation_study.ipynb
+│   ├── 04_ablation_study.ipynb
+│   └── 05_enhancements_validation.ipynb
 │
-├── docs/                              # Documentation
+├── docs/
 │   ├── REPRODUCIBILITY.md
 │   ├── STRUCTURE.md
 │   ├── CHANGELOG.md
-│   └── CONTRIBUTING.md
+│   └── THRESHOLD_SWEEP_AND_FOCAL_LOSS.md
 │
-├── requirements.txt                   # Python dependencies
-├── Dockerfile                         # Container configuration
-├── CITATION.cff                       # Citation metadata
+├── compat.py
+├── requirements.txt
+├── Dockerfile
+├── CITATION.cff
 └── README.md
 ```
 
@@ -407,11 +412,9 @@ All code, simulation parameters, and evaluation procedures are provided for full
 
 ### Version History
 
-| Repository Version | Paper Version | Status |
-|:-----------------:|:-------------:|:------:|
-| `v1.0.0` (main) | Pre-print v1 | ✅ Stable |
-| `v1.1.0` (dev) | Under Review | 🔄 Active Development |
-| `v2.0.0` (future) | Published | 📅 Planned |
+| Branch | Purpose | Status |
+|:------:|---------|:------:|
+| `main` | Active development and reproducibility artifacts | ✅ Current |
 
 ---
 
@@ -422,7 +425,7 @@ All code, simulation parameters, and evaluation procedures are provided for full
 | [REPRODUCIBILITY.md](docs/REPRODUCIBILITY.md) | Detailed reproduction guide, parameter specs, and result validation |
 | [STRUCTURE.md](docs/STRUCTURE.md) | In-depth architecture documentation and module descriptions |
 | [CHANGELOG.md](docs/CHANGELOG.md) | Version history, updates, and breaking changes |
-| [CONTRIBUTING.md](docs/CONTRIBUTING.md) | Guidelines for contributions, bug reports, and feature requests |
+| [THRESHOLD_SWEEP_AND_FOCAL_LOSS.md](docs/THRESHOLD_SWEEP_AND_FOCAL_LOSS.md) | Threshold-sweep experiments and focal-loss analysis notes |
 
 ---
 
@@ -468,7 +471,7 @@ Contributions from the research community are welcome.
 | **Documentation** | Follow existing style; update `docs/` and inline docstrings accordingly |
 | **Code** | Add tests under `tests/`; verify all tests pass with `pytest tests/` |
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for full guidelines.
+Use GitHub issues and pull requests for contribution discussion and review.
 
 ---
 
