@@ -1,54 +1,64 @@
 {
-  "best_val_loss": 0.4078684171040853,
-  "epochs": 8,
+  "best_val_loss": 0.4049579334259033,
+  "epochs": 10,
   "checkpoint_path": "results\\final_20seed\\lstm\\seed_52\\checkpoints\\best.pt",
   "history": [
     {
       "epoch": 1,
-      "train_loss": 1.089931651864733,
-      "val_loss": 0.9082889493306477
+      "train_loss": 1.0942650856290546,
+      "val_loss": 0.9684450054168701
     },
     {
       "epoch": 2,
-      "train_loss": 0.7846712061337062,
-      "val_loss": 0.6298995431264242
+      "train_loss": 0.8771054571015494,
+      "val_loss": 0.7263796615600586
     },
     {
       "epoch": 3,
-      "train_loss": 0.558713606936591,
-      "val_loss": 0.48907880624135336
+      "train_loss": 0.6620523759296962,
+      "val_loss": 0.5469591108957926
     },
     {
       "epoch": 4,
-      "train_loss": 0.4346596724646432,
-      "val_loss": 0.4078684171040853
+      "train_loss": 0.5500899301256452,
+      "val_loss": 0.46635586420694985
     },
     {
       "epoch": 5,
-      "train_loss": 0.3894278789418084,
-      "val_loss": 0.4555474662780762
+      "train_loss": 0.454364903313773,
+      "val_loss": 0.46223769187927244
     },
     {
       "epoch": 6,
-      "train_loss": 0.32132439647402083,
-      "val_loss": 0.48461270650227867
+      "train_loss": 0.41202257590634483,
+      "val_loss": 0.4049579334259033
     },
     {
       "epoch": 7,
-      "train_loss": 0.3423424001250948,
-      "val_loss": 0.4661741352081299
+      "train_loss": 0.39455086094992503,
+      "val_loss": 0.5079518111546835
     },
     {
       "epoch": 8,
-      "train_loss": 0.35401275481496536,
-      "val_loss": 0.5135283438364665
+      "train_loss": 0.3831482353380748,
+      "val_loss": 0.4474710496266683
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.36332757438932145,
+      "val_loss": 0.4740270201365153
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.31491828680038453,
+      "val_loss": 0.4737460549672445
     }
   ],
-  "params": 156865,
-  "runtime_seconds": 6.733038902282715,
+  "params": 70785,
+  "runtime_seconds": 7.473090648651123,
   "early_stopping_patience": 4,
   "loss_type": "bce",
   "focal_gamma": 1.5,
-  "train_val_loss_gap": 0.15951558902150115,
+  "train_val_loss_gap": 0.15882776816685995,
   "overfitting_warning": false
 }
