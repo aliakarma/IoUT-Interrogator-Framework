@@ -1,0 +1,14 @@
+{
+  "confusion_matrix": {
+    "tn": 50,
+    "fp": 13,
+    "fn": 3,
+    "tp": 9
+  },
+  "confusion_matrix_normalized": {
+    "tn": 0.7936507936507936,
+    "fp": 0.20634920634920634,
+    "fn": 0.25,
+    "tp": 0.75
+  }
+}

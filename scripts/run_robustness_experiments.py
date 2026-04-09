@@ -17,7 +17,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from data.data_loader import IoUTDataset, build_dataloaders, drop_missing_segments, inject_gaussian_noise, load_records, simulate_sensor_failure
 from evaluation.evaluate import evaluate_model
 from models.baselines import build_baseline
+from models.hybrid_temporal import HybridTemporalClassifier
 from models.sequence_model import GRUClassifier, LSTMClassifier
+from models.temporal_cnn import TemporalCNNClassifier
+from models.transformer_light import LightweightTransformerClassifier
 from training.trainer import fit_model, set_global_seed
 
 try:
@@ -47,6 +50,31 @@ def _build_model(model_type: str, input_dim: int, model_cfg: Dict[str, Any], see
             input_dim=input_dim,
             hidden_dim=int(model_cfg.get("hidden_dim", 64)),
             num_layers=int(model_cfg.get("num_layers", 2)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+    if normalized in {"temporal_cnn", "tcnn", "cnn"}:
+        return TemporalCNNClassifier(
+            input_dim=input_dim,
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
+            channels=int(model_cfg.get("channels", 64)),
+            kernel_size=int(model_cfg.get("kernel_size", 5)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+    if normalized in {"hybrid_temporal", "hybrid_cnn", "hybrid"}:
+        return HybridTemporalClassifier(
+            input_dim=input_dim,
+            hidden_dim=int(model_cfg.get("hidden_dim", 96)),
+            channels=int(model_cfg.get("channels", 96)),
+            kernel_size=int(model_cfg.get("kernel_size", 5)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+    if normalized in {"transformer_light", "light_transformer", "transformer"}:
+        return LightweightTransformerClassifier(
+            input_dim=input_dim,
+            d_model=int(model_cfg.get("d_model", 64)),
+            nhead=int(model_cfg.get("nhead", 4)),
+            num_layers=int(model_cfg.get("num_layers", 2)),
+            dim_feedforward=int(model_cfg.get("dim_feedforward", 128)),
             dropout=float(model_cfg.get("dropout", 0.2)),
         )
     return build_baseline(normalized, seed=seed)
@@ -98,6 +126,10 @@ def main() -> None:
     if hasattr(model, "fit") and not hasattr(model, "parameters"):
         model.fit(loaders["train"])
     else:
+        output_root = Path(args.output_dir)
+        output_root.mkdir(parents=True, exist_ok=True)
+        (output_root / "checkpoints").mkdir(parents=True, exist_ok=True)
+        (output_root / "logs").mkdir(parents=True, exist_ok=True)
         model, _ = fit_model(
             model=model,
             train_loader=loaders["train"],

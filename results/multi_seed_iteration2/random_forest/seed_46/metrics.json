@@ -1,0 +1,38 @@
+{
+  "accuracy": 0.88,
+  "balanced_accuracy": 0.9285714285714286,
+  "precision": 0.5714285714285714,
+  "recall": 1.0,
+  "f1": 0.7272727272727273,
+  "roc_auc": 0.9841269841269841,
+  "pr_auc": 0.9464285714285715,
+  "class_distribution": {
+    "0": 63,
+    "1": 12
+  },
+  "per_class_precision_recall": {
+    "class_0": {
+      "precision": 1.0,
+      "recall": 0.8571428571428571
+    },
+    "class_1": {
+      "precision": 0.5714285714285714,
+      "recall": 1.0
+    }
+  },
+  "confusion_matrix": {
+    "tn": 54,
+    "fp": 9,
+    "fn": 0,
+    "tp": 12
+  },
+  "confusion_matrix_normalized": {
+    "tn": 0.8571428571428571,
+    "fp": 0.14285714285714285,
+    "fn": 0.0,
+    "tp": 1.0
+  },
+  "threshold": 0.1,
+  "n_samples": 75,
+  "mean_probability": 0.1239333376288414
+}
