@@ -119,6 +119,8 @@ def main() -> None:
         normalize=bool(data_cfg.get("normalize", True)),
         seed=seed,
         strategy=str(data_cfg.get("split_strategy", "group")),
+        use_fixed_splits=bool(data_cfg.get("use_fixed_splits", True)),
+        splits_path=str(data_cfg.get("splits_path", "splits/split_v1.json")),
     )
     train_samples, val_samples, test_samples = splits
 

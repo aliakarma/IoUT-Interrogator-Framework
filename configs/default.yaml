@@ -9,6 +9,8 @@ data:
   num_workers: 0
   normalize: true
   split_strategy: group
+  use_fixed_splits: true
+  splits_path: splits/split_v1.json
 
 model:
   type: hybrid_temporal

@@ -1,22 +1,29 @@
 {
   "gru_vs_baseline": {
     "p_value": null,
+    "test_type": "paired_t_test",
     "baseline": "random_forest"
   },
   "lstm_vs_baseline": {
     "p_value": null,
+    "test_type": "paired_t_test",
     "baseline": "random_forest"
   },
   "temporal_cnn_vs_baseline": {
     "p_value": null,
+    "test_type": "paired_t_test",
     "baseline": "random_forest"
   },
   "transformer_light_vs_baseline": {
     "p_value": null,
+    "test_type": "paired_t_test",
     "baseline": "random_forest"
   },
   "hybrid_temporal_vs_baseline": {
-    "p_value": 0.5022540691148093,
-    "baseline": "random_forest"
+    "p_value": 0.0009166540234142322,
+    "test_type": "paired_t_test",
+    "baseline": "random_forest",
+    "mean_diff": 0.0443804323060617,
+    "std_diff": 0.04933046697646548
   }
 }

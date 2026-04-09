@@ -205,6 +205,91 @@ def validate_splits(
     return overlaps
 
 
+def save_split_indices(
+    samples: Sequence[SensorSequence],
+    train_indices: Sequence[int],
+    val_indices: Sequence[int],
+    test_indices: Sequence[int],
+    output_path: str | Path,
+) -> None:
+    """Save split indices to JSON for reproducibility."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "train_indices": [int(i) for i in train_indices],
+        "val_indices": [int(i) for i in val_indices],
+        "test_indices": [int(i) for i in test_indices],
+        "sample_ids": [sample.sensor_id for sample in samples],
+        "n_samples": len(samples),
+    }
+    with output_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+
+
+def load_split_indices(index_path: str | Path) -> Tuple[List[int], List[int], List[int]]:
+    """Load pre-saved split indices."""
+    index_path = Path(index_path)
+    if not index_path.exists():
+        raise FileNotFoundError(f"Split index file not found: {index_path}")
+    with index_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return (
+        payload["train_indices"],
+        payload["val_indices"],
+        payload["test_indices"],
+    )
+
+
+def create_fixed_splits(
+    data: Sequence[SensorSequence] | Sequence[Dict[str, Any]],
+    output_path: str | Path = "splits/split_v1.json",
+    strategy: str = "group",
+    train_split: float = 0.70,
+    val_split: float = 0.15,
+    test_split: float = 0.15,
+    seed: int = 42,
+) -> Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]:
+    """
+    Create fixed splits and save indices. On subsequent calls, reuse saved indices.
+    
+    This ensures the SAME test set is used across all seeds.
+    """
+    output_path = Path(output_path)
+    samples = list(data)
+    if isinstance(samples[0], dict):
+        samples = _records_to_sequences(samples)  # type: ignore[assignment]
+    
+    # Try to load existing splits
+    if output_path.exists():
+        train_idx, val_idx, test_idx = load_split_indices(output_path)
+        train = [samples[i] for i in train_idx]
+        val = [samples[i] for i in val_idx]
+        test = [samples[i] for i in test_idx]
+        validate_splits(train, val, test, strategy=strategy)
+        return train, val, test
+    
+    # Create new splits
+    train, val, test = create_splits(
+        samples,
+        strategy=strategy,
+        train_split=train_split,
+        val_split=val_split,
+        test_split=test_split,
+        seed=seed,
+    )
+    
+    # Map back to indices
+    sample_to_index = {id(sample): idx for idx, sample in enumerate(samples)}
+    train_indices = [sample_to_index[id(s)] for s in train]
+    val_indices = [sample_to_index[id(s)] for s in val]
+    test_indices = [sample_to_index[id(s)] for s in test]
+    
+    # Save for reproducibility
+    save_split_indices(samples, train_indices, val_indices, test_indices, output_path)
+    
+    return train, val, test
+
+
 def create_splits(
     data: Sequence[SensorSequence] | Sequence[Dict[str, Any]],
     strategy: str = "group",
@@ -339,16 +424,30 @@ def build_dataloaders(
     normalize: bool,
     seed: int,
     strategy: str = "group",
+    use_fixed_splits: bool = True,
+    splits_path: str | Path = "splits/split_v1.json",
 ) -> Tuple[Dict[str, DataLoader], Dict[str, Any], Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]]:
     samples = list(records) if records and isinstance(records[0], SensorSequence) else _records_to_sequences(records)  # type: ignore[index]
-    train_samples, val_samples, test_samples = create_splits(
-        samples,
-        strategy=strategy,
-        train_split=train_split,
-        val_split=val_split,
-        test_split=test_split,
-        seed=seed,
-    )
+    
+    if use_fixed_splits:
+        train_samples, val_samples, test_samples = create_fixed_splits(
+            samples,
+            output_path=splits_path,
+            strategy=strategy,
+            train_split=train_split,
+            val_split=val_split,
+            test_split=test_split,
+            seed=seed,
+        )
+    else:
+        train_samples, val_samples, test_samples = create_splits(
+            samples,
+            strategy=strategy,
+            train_split=train_split,
+            val_split=val_split,
+            test_split=test_split,
+            seed=seed,
+        )
 
     normalizer = SequenceNormalizer().fit([sample.signals for sample in train_samples]) if normalize else None
 
