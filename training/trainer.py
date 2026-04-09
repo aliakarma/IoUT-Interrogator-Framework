@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import time
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -48,6 +49,7 @@ def fit_model(
     input_dim: int,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     logger = logging.getLogger("iout.training")
+    start_time = time.time()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
@@ -107,7 +109,18 @@ def fit_model(
         "epochs": epochs,
         "checkpoint_path": str(best_path),
         "history": history,
+        "params": int(sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)),
+        "runtime_seconds": float(time.time() - start_time),
     }
+    if history:
+        final_gap = float(history[-1]["val_loss"] - history[-1]["train_loss"])
+        summary["train_val_loss_gap"] = final_gap
+        summary["overfitting_warning"] = bool(final_gap > 0.2)
+        if summary["overfitting_warning"]:
+            logger.warning(
+                "Training sanity warning: potential overfitting detected (val_loss - train_loss = %.4f)",
+                final_gap,
+            )
     with (results_dir / "training_summary.json").open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
     return model, summary

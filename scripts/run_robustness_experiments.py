@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from data.data_loader import IoUTDataset, build_dataloaders, drop_missing_segments, inject_gaussian_noise, load_records, simulate_sensor_failure
 from evaluation.evaluate import evaluate_model
@@ -63,7 +67,7 @@ def main() -> None:
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--model", default=None)
     parser.add_argument("--output-dir", default="results/robustness")
-    parser.add_argument("--sigma", type=float, default=0.1)
+    parser.add_argument("--noise-levels", default="0.0,0.1,0.2,0.3,0.4,0.5")
     parser.add_argument("--missing-fraction", type=float, default=0.15)
     parser.add_argument("--failure-fraction", type=float, default=0.2)
     args = parser.parse_args()
@@ -107,23 +111,53 @@ def main() -> None:
     output_root = Path(args.output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
 
+    rows: List[Dict[str, Any]] = []
+    noise_levels = [float(token.strip()) for token in args.noise_levels.split(",") if token.strip()]
+    noise_curve = {"noise_levels": [], "accuracy": []}
+
+    for noise_level in noise_levels:
+        samples = inject_gaussian_noise(test_samples, sigma=noise_level, seed=seed)
+        test_loader = _build_loader(samples, loaders["train"].dataset, batch_size=int(data_cfg.get("batch_size", 32)), seq_len=int(data_cfg.get("seq_len", 64)))
+        metrics = evaluate_model(model, test_loader, output_dir=output_root / f"gaussian_noise_{noise_level:.2f}")
+        rows.append({"scenario": f"gaussian_noise_{noise_level:.2f}", "noise_level": noise_level, **{k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))}})
+        noise_curve["noise_levels"].append(noise_level)
+        noise_curve["accuracy"].append(float(metrics.get("accuracy", 0.0)))
+
     perturbations = {
-        "clean": test_samples,
-        "gaussian_noise": inject_gaussian_noise(test_samples, sigma=args.sigma, seed=seed),
         "missing_segments": drop_missing_segments(test_samples, drop_fraction=args.missing_fraction, seed=seed),
         "sensor_failure": simulate_sensor_failure(test_samples, failure_fraction=args.failure_fraction, seed=seed),
     }
 
-    rows: List[Dict[str, Any]] = []
     for name, samples in perturbations.items():
         test_loader = _build_loader(samples, loaders["train"].dataset, batch_size=int(data_cfg.get("batch_size", 32)), seq_len=int(data_cfg.get("seq_len", 64)))
         metrics = evaluate_model(model, test_loader, output_dir=output_root / name)
         rows.append({"scenario": name, **{k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))}})
 
+    degradation_rate = 0.0
+    if len(noise_curve["noise_levels"]) >= 2:
+        x = np.asarray(noise_curve["noise_levels"], dtype=np.float64)
+        y = np.asarray(noise_curve["accuracy"], dtype=np.float64)
+        slope, _ = np.polyfit(x, y, deg=1)
+        degradation_rate = float(slope)
+
+    robustness_analysis = {
+        "noise_levels": noise_curve["noise_levels"],
+        "accuracy": noise_curve["accuracy"],
+        "degradation_rate": degradation_rate,
+    }
+
     table = pd.DataFrame(rows)
     table.to_csv(output_root / "robustness_summary.csv", index=False)
     with (output_root / "robustness_summary.json").open("w", encoding="utf-8") as handle:
         json.dump(rows, handle, indent=2)
+    with (output_root / "robustness_analysis.json").open("w", encoding="utf-8") as handle:
+        json.dump(robustness_analysis, handle, indent=2)
+
+    root_results = Path("results")
+    root_results.mkdir(parents=True, exist_ok=True)
+    with (root_results / "robustness_analysis.json").open("w", encoding="utf-8") as handle:
+        json.dump(robustness_analysis, handle, indent=2)
+
     print(table.to_string(index=False))
 
 

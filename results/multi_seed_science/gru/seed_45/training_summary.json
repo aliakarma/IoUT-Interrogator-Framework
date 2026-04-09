@@ -1,0 +1,51 @@
+{
+  "best_val_loss": 0.3534928528467814,
+  "epochs": 8,
+  "checkpoint_path": "results\\multi_seed_science\\gru\\seed_45\\checkpoints\\best.pt",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.9346857656751361,
+      "val_loss": 0.6365689786275228
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.59405465057918,
+      "val_loss": 0.4087731552124023
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.4428006658383778,
+      "val_loss": 0.3534928528467814
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.4244940235785076,
+      "val_loss": 0.36036248366038004
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.32046767626489914,
+      "val_loss": 0.3905411100387573
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.2541203393254961,
+      "val_loss": 0.44551833470662433
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.2143572905233928,
+      "val_loss": 0.4669574578603109
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.1925696417263576,
+      "val_loss": 0.43707310358683266
+    }
+  ],
+  "params": 54145,
+  "runtime_seconds": 6.352197885513306,
+  "train_val_loss_gap": 0.24450346186047506,
+  "overfitting_warning": true
+}

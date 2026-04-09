@@ -1,0 +1,10 @@
+{
+  "gru_vs_baseline": {
+    "p_value": 6.877506487516106e-05,
+    "baseline": "majority"
+  },
+  "lstm_vs_baseline": {
+    "p_value": 0.0001678972395658684,
+    "baseline": "majority"
+  }
+}
