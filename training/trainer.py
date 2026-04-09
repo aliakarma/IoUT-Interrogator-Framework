@@ -10,6 +10,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def set_global_seed(seed: int) -> None:
@@ -39,6 +40,22 @@ def _run_eval(model: torch.nn.Module, loader, criterion: nn.Module, device: torc
     return {"loss": total_loss / max(total_items, 1)}
 
 
+def _compute_loss(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    loss_type: str,
+    pos_weight: torch.Tensor,
+    focal_gamma: float,
+) -> torch.Tensor:
+    normalized = loss_type.lower().strip()
+    if normalized == "focal":
+        bce = F.binary_cross_entropy_with_logits(logits, labels, reduction="none", pos_weight=pos_weight)
+        pt = torch.exp(-bce)
+        loss = ((1.0 - pt) ** focal_gamma) * bce
+        return loss.mean()
+    return F.binary_cross_entropy_with_logits(logits, labels, pos_weight=pos_weight)
+
+
 def fit_model(
     model: torch.nn.Module,
     train_loader,
@@ -58,6 +75,9 @@ def fit_model(
     lr = float(training_cfg.get("learning_rate", 1e-3))
     weight_decay = float(training_cfg.get("weight_decay", 0.0))
     grad_clip_norm = float(training_cfg.get("grad_clip_norm", 1.0))
+    early_stopping_patience = int(training_cfg.get("early_stopping_patience", 3))
+    loss_type = str(training_cfg.get("loss_type", "bce"))
+    focal_gamma = float(training_cfg.get("focal_gamma", 1.5))
 
     positive_count = 0
     negative_count = 0
@@ -73,6 +93,7 @@ def fit_model(
     best_val_loss = float("inf")
     best_path = results_dir / "checkpoints" / "best.pt"
     history = []
+    epochs_without_improvement = 0
 
     for epoch in range(1, epochs + 1):
         model.train()
@@ -85,7 +106,7 @@ def fit_model(
 
             optimizer.zero_grad(set_to_none=True)
             logits = model(signal, lengths)
-            loss = criterion(logits, labels)
+            loss = _compute_loss(logits, labels, loss_type=loss_type, pos_weight=pos_weight, focal_gamma=focal_gamma)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
             optimizer.step()
@@ -103,14 +124,32 @@ def fit_model(
         if val_stats["loss"] <= best_val_loss:
             best_val_loss = val_stats["loss"]
             torch.save({"model_state_dict": model.state_dict(), "input_dim": input_dim}, best_path)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if early_stopping_patience > 0 and epochs_without_improvement >= early_stopping_patience:
+            logger.info(
+                "Early stopping triggered at epoch %d (patience=%d)",
+                epoch,
+                early_stopping_patience,
+            )
+            break
+
+    if best_path.exists():
+        checkpoint = torch.load(best_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
 
     summary = {
         "best_val_loss": best_val_loss,
-        "epochs": epochs,
+        "epochs": len(history),
         "checkpoint_path": str(best_path),
         "history": history,
         "params": int(sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)),
         "runtime_seconds": float(time.time() - start_time),
+        "early_stopping_patience": early_stopping_patience,
+        "loss_type": loss_type,
+        "focal_gamma": focal_gamma,
     }
     if history:
         final_gap = float(history[-1]["val_loss"] - history[-1]["train_loss"])

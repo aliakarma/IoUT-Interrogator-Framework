@@ -1,0 +1,57 @@
+{
+  "best_val_loss": 0.451368670463562,
+  "epochs": 9,
+  "checkpoint_path": "results\\multi_seed_iteration3\\gru\\seed_44\\checkpoints\\best.pt",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.9897619271278382,
+      "val_loss": 0.680067637761434
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.7056595151765006,
+      "val_loss": 0.5188683573404947
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.5934002039262226,
+      "val_loss": 0.4705955410003662
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.5008581896339144,
+      "val_loss": 0.4701819356282552
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.43609021757330213,
+      "val_loss": 0.451368670463562
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.3447609601702009,
+      "val_loss": 0.5226926453908285
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.2826502218416759,
+      "val_loss": 0.7609718068440755
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.27830367292676655,
+      "val_loss": 0.5990273316701253
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.26788357802799767,
+      "val_loss": 0.8105421765645345
+    }
+  ],
+  "params": 54145,
+  "runtime_seconds": 6.593297243118286,
+  "early_stopping_patience": 4,
+  "train_val_loss_gap": 0.5426585985365369,
+  "overfitting_warning": true
+}

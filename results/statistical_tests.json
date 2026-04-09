@@ -1,10 +1,22 @@
 {
   "gru_vs_baseline": {
-    "p_value": 6.877506487516106e-05,
-    "baseline": "majority"
+    "p_value": null,
+    "baseline": "random_forest"
   },
   "lstm_vs_baseline": {
-    "p_value": 0.0001678972395658684,
-    "baseline": "majority"
+    "p_value": null,
+    "baseline": "random_forest"
+  },
+  "temporal_cnn_vs_baseline": {
+    "p_value": null,
+    "baseline": "random_forest"
+  },
+  "transformer_light_vs_baseline": {
+    "p_value": null,
+    "baseline": "random_forest"
+  },
+  "hybrid_temporal_vs_baseline": {
+    "p_value": 0.5022540691148093,
+    "baseline": "random_forest"
   }
 }

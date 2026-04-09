@@ -1,0 +1,47 @@
+{
+  "best_val_loss": 0.4704017607371012,
+  "epochs": 7,
+  "checkpoint_path": "results\\multi_seed_iteration3\\temporal_cnn\\seed_46\\checkpoints\\best.pt",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.9367862010002136,
+      "val_loss": 0.8599708970387777
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.6224239383425031,
+      "val_loss": 0.5203332901000977
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.4410317356245858,
+      "val_loss": 0.4704017607371012
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.3358686837979725,
+      "val_loss": 0.4914034684499105
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.2653751255784716,
+      "val_loss": 0.5011334959665934
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.22543619079249247,
+      "val_loss": 0.5979386377334595
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.18544437774590083,
+      "val_loss": 0.5931237681706747
+    }
+  ],
+  "params": 68225,
+  "runtime_seconds": 1.5378353595733643,
+  "early_stopping_patience": 4,
+  "train_val_loss_gap": 0.40767939042477386,
+  "overfitting_warning": true
+}
