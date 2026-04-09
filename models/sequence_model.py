@@ -4,14 +4,6 @@ import torch
 import torch.nn as nn
 
 
-class GRUClassifier(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.2) -> None:
-from __future__ import annotations
-
-import torch
-import torch.nn as nn
-
-
 class SequenceClassifier(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.2) -> None:
         super().__init__()
@@ -19,12 +11,6 @@ class SequenceClassifier(nn.Module):
         self.hidden_dim = int(hidden_dim)
         self.num_layers = int(num_layers)
         self.dropout = float(dropout)
-
-    @staticmethod
-    def _pack_inputs(signal: torch.Tensor, lengths: torch.Tensor | None) -> tuple[torch.Tensor, torch.Tensor | None]:
-        if lengths is None:
-            return signal, None
-        return signal, lengths.to(signal.device)
 
     def count_parameters(self) -> int:
         return sum(parameter.numel() for parameter in self.parameters() if parameter.requires_grad)
@@ -56,8 +42,7 @@ class GRUClassifier(SequenceClassifier):
             _, hidden = self.encoder(packed)
         else:
             _, hidden = self.encoder(projected)
-        representation = hidden[-1]
-        return self.classifier(representation).squeeze(-1)
+        return self.classifier(hidden[-1]).squeeze(-1)
 
 
 class LSTMClassifier(SequenceClassifier):
@@ -86,5 +71,4 @@ class LSTMClassifier(SequenceClassifier):
             _, (hidden, _) = self.encoder(packed)
         else:
             _, (hidden, _) = self.encoder(projected)
-        representation = hidden[-1]
-        return self.classifier(representation).squeeze(-1)
+        return self.classifier(hidden[-1]).squeeze(-1)

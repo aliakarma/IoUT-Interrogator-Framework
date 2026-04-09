@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import random
-from collections import defaultdict
+import warnings
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
@@ -136,6 +137,35 @@ def _records_to_sequences(records: Sequence[Dict[str, Any]]) -> List[SensorSeque
     if not sequences:
         raise ValueError("No sequences could be built from the provided records.")
     return sequences
+
+
+def compute_dataset_statistics(samples: Sequence[SensorSequence]) -> Dict[str, Any]:
+    labels = [int(sample.label) for sample in samples]
+    lengths = [int(sample.signals.shape[0]) for sample in samples]
+    label_counts = {int(key): int(value) for key, value in Counter(labels).items()}
+    total = max(len(labels), 1)
+    imbalance_ratio = max(label_counts.values()) / total if label_counts else 0.0
+    stats = {
+        "n_samples": int(len(samples)),
+        "sequence_length": {
+            "min": int(min(lengths)) if lengths else 0,
+            "max": int(max(lengths)) if lengths else 0,
+            "mean": float(np.mean(lengths)) if lengths else 0.0,
+            "std": float(np.std(lengths)) if lengths else 0.0,
+        },
+        "class_balance": label_counts,
+        "imbalance_ratio": float(imbalance_ratio),
+    }
+    if imbalance_ratio > 0.80:
+        warnings.warn(
+            (
+                "Dataset imbalance warning: dominant class exceeds 80%. "
+                "Consider class-weighting, resampling, or threshold calibration."
+            ),
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return stats
 
 
 def _sensor_overlap(a: Sequence[SensorSequence], b: Sequence[SensorSequence]) -> int:
@@ -288,9 +318,9 @@ def _collate_fn(seq_len: int):
         sensor_ids: List[str] = []
         for row_index, item in enumerate(batch):
             seq = item["signal"][:max_len]
-            seq_len = seq.shape[0]
-            signals[row_index, :seq_len] = seq
-            lengths[row_index] = seq_len
+            current_len = seq.shape[0]
+            signals[row_index, :current_len] = seq
+            lengths[row_index] = current_len
             labels[row_index] = item["label"]
             sensor_ids.append(item["sensor_id"])
         return {"sensor_id": sensor_ids, "signal": signals, "lengths": lengths, "label": labels}
@@ -333,6 +363,8 @@ def build_dataloaders(
     }
 
     feature_dim = int(train_samples[0].signals.shape[-1]) if train_samples else int(samples[0].signals.shape[-1])
+    dataset_statistics = compute_dataset_statistics(samples)
+
     metadata = {
         "input_dim": feature_dim,
         "split_strategy": strategy,
@@ -342,6 +374,7 @@ def build_dataloaders(
         "train_sensor_ids": [sample.sensor_id for sample in train_samples],
         "val_sensor_ids": [sample.sensor_id for sample in val_samples],
         "test_sensor_ids": [sample.sensor_id for sample in test_samples],
+        "dataset_statistics": dataset_statistics,
     }
     return loaders, metadata, (train_samples, val_samples, test_samples)
 

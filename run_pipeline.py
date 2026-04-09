@@ -13,8 +13,9 @@ import torch
 import yaml
 
 from data.data_loader import IoUTDataset, build_dataloaders, load_records
-from evaluation.evaluate import evaluate_model
+from evaluation.evaluate import evaluate_model, tune_threshold
 from models.baselines import build_baseline, count_learned_parameters
+from models.temporal_cnn import TemporalCNNClassifier
 from models.sequence_model import GRUClassifier, LSTMClassifier
 from training.trainer import fit_model, set_global_seed
 
@@ -44,6 +45,17 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
         seed=int(config["training"].get("seed", 42)),
         strategy=str(data_cfg.get("split_strategy", "group")),
     )
+
+    train_ids = set(metadata.get("train_sensor_ids", []))
+    val_ids = set(metadata.get("val_sensor_ids", []))
+    test_ids = set(metadata.get("test_sensor_ids", []))
+    if train_ids & val_ids or train_ids & test_ids or val_ids & test_ids:
+        raise AssertionError("Leakage check failed: overlapping sensor_id values across train/val/test splits.")
+
+    stats = metadata.get("dataset_statistics", {})
+    if stats:
+        logging.info("Dataset statistics: %s", json.dumps(stats, indent=2))
+
     return loaders, metadata
 
 
@@ -64,6 +76,15 @@ def build_model(config: Dict[str, Any], input_dim: int):
             input_dim=input_dim,
             hidden_dim=int(model_cfg.get("hidden_dim", 64)),
             num_layers=int(model_cfg.get("num_layers", 2)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+
+    if model_type in {"temporal_cnn", "tcnn", "cnn"}:
+        return TemporalCNNClassifier(
+            input_dim=input_dim,
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
+            channels=int(model_cfg.get("channels", 64)),
+            kernel_size=int(model_cfg.get("kernel_size", 5)),
             dropout=float(model_cfg.get("dropout", 0.2)),
         )
 
@@ -108,11 +129,18 @@ def train(model, loaders: Dict[str, Any], config: Dict[str, Any], metadata: Dict
 def evaluate(model, loaders: Dict[str, Any], config: Dict[str, Any], metadata: Dict[str, Any]):
     evaluation_cfg = config.get("evaluation", {})
     results_dir = Path(config["training"].get("results_dir", "results/run_1"))
+    threshold = float(evaluation_cfg.get("threshold", 0.5))
+    if bool(evaluation_cfg.get("tune_threshold", False)):
+        threshold = tune_threshold(
+            model=model,
+            val_loader=loaders["val"],
+            metric_name=str(evaluation_cfg.get("threshold_metric", "f1")),
+        )
     return evaluate_model(
         model=model,
         test_loader=loaders["test"],
         output_dir=results_dir,
-        threshold=float(evaluation_cfg.get("threshold", 0.5)),
+        threshold=threshold,
         save_confusion_matrix=bool(evaluation_cfg.get("save_confusion_matrix", True)),
     )
 
@@ -157,6 +185,7 @@ def main() -> None:
     eval_summary = evaluate(trained_model, loaders, config, metadata)
 
     combined_summary = {
+        "model": str(config.get("model", {}).get("type", "unknown")),
         "metadata": metadata,
         "train": train_summary,
         "eval": eval_summary,
@@ -165,6 +194,11 @@ def main() -> None:
     results_dir = Path(config.get("training", {}).get("results_dir", "results/run_1"))
     with (results_dir / "run_summary.json").open("w", encoding="utf-8") as handle:
         json.dump(combined_summary, handle, indent=2)
+
+    metrics_mirror_path = Path("results") / "metrics.json"
+    metrics_mirror_path.parent.mkdir(parents=True, exist_ok=True)
+    with metrics_mirror_path.open("w", encoding="utf-8") as handle:
+        json.dump(eval_summary, handle, indent=2)
 
     logging.info("Training summary: %s", json.dumps(train_summary, indent=2))
     logging.info("Evaluation summary: %s", json.dumps(eval_summary, indent=2))

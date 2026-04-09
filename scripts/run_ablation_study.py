@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from data.data_loader import build_dataloaders, load_records
 from evaluation.evaluate import evaluate_model

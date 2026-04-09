@@ -22,8 +22,15 @@ def _collect_rows(root: Path) -> List[Dict[str, Any]]:
         training_summary = _read_json(training_summary_path) if training_summary_path.exists() else {}
         run_summary_path = run_dir / "run_summary.json"
         run_summary = _read_json(run_summary_path) if run_summary_path.exists() else {}
+        run_result_path = run_dir / "run_result.json"
+        run_result = _read_json(run_result_path) if run_result_path.exists() else {}
 
-        model_name = run_summary.get("metadata", {}).get("model", run_dir.name)
+        model_name = (
+            run_summary.get("model")
+            or run_summary.get("metadata", {}).get("model")
+            or run_result.get("model")
+            or run_dir.name
+        )
         rows.append(
             {
                 "Model": model_name,

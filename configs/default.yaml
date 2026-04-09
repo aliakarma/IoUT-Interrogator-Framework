@@ -8,6 +8,7 @@ data:
   batch_size: 32
   num_workers: 0
   normalize: true
+  split_strategy: group
 
 model:
   type: gru
@@ -15,6 +16,8 @@ model:
   hidden_dim: 64
   num_layers: 2
   dropout: 0.20
+  channels: 64
+  kernel_size: 5
 
 training:
   seed: 42
@@ -27,6 +30,8 @@ training:
 
 evaluation:
   threshold: 0.50
+  tune_threshold: false
+  threshold_metric: f1
   save_confusion_matrix: true
 
 baseline:
