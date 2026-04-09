@@ -1,171 +1,151 @@
-"""
-Run component ablation experiments and aggregate results.
-
-Configurations:
-  - full_model
-  - energy_disabled
-  - routing_disabled
-  - blockchain_disabled
-
-Output schema:
-  configuration, metric_name, value
-"""
+from __future__ import annotations
 
 import argparse
+import copy
+import json
 import os
 import sys
-from typing import Dict, List
+from pathlib import Path
+from typing import Any, Dict, List
 
 import pandas as pd
-from tqdm import tqdm
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from compat import ensure_supported_python
-from simulation.scripts.run_simulation import build_raw_results_long, run_single_simulation
+from data.data_loader import build_dataloaders, load_records
+from evaluation.evaluate import evaluate_model
+from models.baselines import build_baseline, count_learned_parameters
+from models.sequence_model import GRUClassifier, LSTMClassifier
+from training.trainer import fit_model, set_global_seed
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
 
 
-def _parse_bool(value):
-    if isinstance(value, bool):
-        return value
-    value = str(value).strip().lower()
-    if value in {"1", "true", "t", "yes", "y", "on"}:
-        return True
-    if value in {"0", "false", "f", "no", "n", "off"}:
-        return False
-    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
+def load_config(path: Path) -> Dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        if path.suffix.lower() in {".yaml", ".yml"}:
+            return yaml.safe_load(handle)
+        return json.load(handle)
 
 
-def _run_configuration(
-    config_name: str,
-    sim_config_path: str,
-    runs: int,
-    seed_base: int,
-    intervals: int,
-    use_transformer: bool,
-    checkpoint: str,
-    model_config: str,
-    temperature: float,
-    no_quantized_transformer: bool,
-    disable_energy_model: bool,
-    disable_routing_model: bool,
-    disable_blockchain: bool,
-) -> pd.DataFrame:
-    all_results = []
-    run_seeds = []
-
-    for run_idx in tqdm(range(runs), desc=f"{config_name} runs", leave=False):
-        seed = seed_base + run_idx
-        run_seeds.append(seed)
-        result = run_single_simulation(
-            config_path=sim_config_path,
-            seed=seed,
-            num_intervals=intervals,
-            use_transformer=use_transformer,
-            checkpoint_path=checkpoint,
-            model_config_path=model_config,
-            temperature=temperature,
-            quantized=not no_quantized_transformer,
-            disable_energy_model=disable_energy_model,
-            disable_routing_model=disable_routing_model,
-            disable_blockchain=disable_blockchain,
+def _build_model(model_type: str, input_dim: int, model_cfg: Dict[str, Any], seed: int):
+    normalized = model_type.lower().strip()
+    if normalized == "gru":
+        return GRUClassifier(
+            input_dim=input_dim,
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
+            num_layers=int(model_cfg.get("num_layers", 2)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
         )
-        all_results.append(result)
+    if normalized == "lstm":
+        return LSTMClassifier(
+            input_dim=input_dim,
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
+            num_layers=int(model_cfg.get("num_layers", 2)),
+            dropout=float(model_cfg.get("dropout", 0.2)),
+        )
+    return build_baseline(normalized, seed=seed)
 
-    raw_df = build_raw_results_long(all_results, run_seeds)
 
-    summary = (
-        raw_df.groupby("metric_name", as_index=False)["value"]
-        .mean()
-        .rename(columns={"value": "value"})
+def _run_variant(config: Dict[str, Any], variant: str, output_dir: Path) -> Dict[str, Any]:
+    data_cfg = config["data"]
+    training_cfg = config["training"]
+    model_cfg = copy.deepcopy(config.get("model", {}))
+    baseline_cfg = copy.deepcopy(config.get("baseline", {}))
+
+    records = load_records(data_cfg["path"], file_format=data_cfg.get("format", "auto"))
+    normalize = bool(data_cfg.get("normalize", True))
+    model_type = str(model_cfg.get("type", "gru")).lower()
+
+    if variant == "no_preprocessing":
+        normalize = False
+    elif variant == "no_temporal":
+        model_type = str(baseline_cfg.get("name", "fft"))
+    elif variant == "replace_with_baseline":
+        model_type = str(baseline_cfg.get("name", "majority"))
+    else:
+        raise ValueError(f"Unsupported ablation variant: {variant}")
+
+    loaders, metadata, _ = build_dataloaders(
+        records=records,
+        seq_len=int(data_cfg.get("seq_len", 64)),
+        train_split=float(data_cfg.get("train_split", 0.7)),
+        val_split=float(data_cfg.get("val_split", 0.15)),
+        test_split=float(data_cfg.get("test_split", 0.15)),
+        batch_size=int(data_cfg.get("batch_size", 32)),
+        num_workers=int(data_cfg.get("num_workers", 0)),
+        normalize=normalize,
+        seed=int(training_cfg.get("seed", 42)),
+        strategy=str(data_cfg.get("split_strategy", "group")),
     )
-    summary.insert(0, "configuration", config_name)
-    return summary[["configuration", "metric_name", "value"]]
+
+    model = _build_model(model_type, int(metadata["input_dim"]), model_cfg, seed=int(training_cfg.get("seed", 42)))
+    if hasattr(model, "fit") and not hasattr(model, "parameters"):
+        model.fit(loaders["train"])
+        train_summary = {"mode": "baseline", "params": int(count_learned_parameters(model)), "runtime_seconds": 0.0}
+    else:
+        trained_model, train_summary = fit_model(
+            model=model,
+            train_loader=loaders["train"],
+            val_loader=loaders["val"],
+            config=config,
+            results_dir=output_dir,
+            log_dir=output_dir / "logs",
+            input_dim=int(metadata["input_dim"]),
+        )
+        model = trained_model
+
+    eval_summary = evaluate_model(model, loaders["test"], output_dir=output_dir)
+    result = {
+        "variant": variant,
+        "model_type": model_type,
+        "metadata": metadata,
+        "train": train_summary,
+        "eval": eval_summary,
+        "params": int(count_learned_parameters(model)),
+    }
+    with (output_dir / "ablation_result.json").open("w", encoding="utf-8") as handle:
+        json.dump(result, handle, indent=2)
+    return result
 
 
 def main() -> None:
-    ensure_supported_python()
-
-    parser = argparse.ArgumentParser(description="Run simulation component ablation study")
-    parser.add_argument("--config", default="simulation/configs/simulation_params.json")
-    parser.add_argument("--runs", type=int, default=10)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--intervals", type=int, default=20)
-    parser.add_argument("--output", default="analysis/stats/ablation_results.csv")
-
-    parser.add_argument(
-        "--use-transformer",
-        type=_parse_bool,
-        nargs="?",
-        const=True,
-        default=True,
-        help="Use transformer trust scores inside simulation loop (default: True).",
-    )
-    parser.add_argument("--checkpoint", default="model/checkpoints/best_model.pt")
-    parser.add_argument("--model-config", default="model/configs/transformer_config.json")
-    parser.add_argument("--temperature", type=float, default=1.5)
-    parser.add_argument("--no-quantized-transformer", action="store_true")
-
+    parser = argparse.ArgumentParser(description="Run IoUT ablation studies")
+    parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument("--variants", default="no_preprocessing,no_temporal,replace_with_baseline")
+    parser.add_argument("--output-dir", default="results/ablation")
     args = parser.parse_args()
 
-    configurations: List[Dict[str, object]] = [
-        {
-            "name": "full_model",
-            "disable_energy_model": False,
-            "disable_routing_model": False,
-            "disable_blockchain": False,
-        },
-        {
-            "name": "energy_disabled",
-            "disable_energy_model": True,
-            "disable_routing_model": False,
-            "disable_blockchain": False,
-        },
-        {
-            "name": "routing_disabled",
-            "disable_energy_model": False,
-            "disable_routing_model": True,
-            "disable_blockchain": False,
-        },
-        {
-            "name": "blockchain_disabled",
-            "disable_energy_model": False,
-            "disable_routing_model": False,
-            "disable_blockchain": True,
-        },
-    ]
+    config = load_config(Path(args.config))
+    seed = int(config.get("training", {}).get("seed", 42))
+    set_global_seed(seed)
 
-    all_rows = []
-    for cfg in configurations:
-        print(
-            f"Running {cfg['name']} "
-            f"(energy_off={cfg['disable_energy_model']}, "
-            f"routing_off={cfg['disable_routing_model']}, "
-            f"blockchain_off={cfg['disable_blockchain']})"
+    output_root = Path(args.output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    rows: List[Dict[str, Any]] = []
+    for variant in [token.strip() for token in args.variants.split(",") if token.strip()]:
+        variant_dir = output_root / variant
+        variant_dir.mkdir(parents=True, exist_ok=True)
+        result = _run_variant(config, variant, variant_dir)
+        rows.append(
+            {
+                "variant": variant,
+                "accuracy": float(result["eval"].get("accuracy", 0.0)),
+                "f1": float(result["eval"].get("f1", 0.0)),
+                "params": int(result["params"]),
+                "runtime_seconds": float(result["train"].get("runtime_seconds", 0.0)),
+            }
         )
-        cfg_df = _run_configuration(
-            config_name=str(cfg["name"]),
-            sim_config_path=args.config,
-            runs=args.runs,
-            seed_base=args.seed,
-            intervals=args.intervals,
-            use_transformer=args.use_transformer,
-            checkpoint=args.checkpoint,
-            model_config=args.model_config,
-            temperature=args.temperature,
-            no_quantized_transformer=args.no_quantized_transformer,
-            disable_energy_model=bool(cfg["disable_energy_model"]),
-            disable_routing_model=bool(cfg["disable_routing_model"]),
-            disable_blockchain=bool(cfg["disable_blockchain"]),
-        )
-        all_rows.append(cfg_df)
 
-    out_df = pd.concat(all_rows, ignore_index=True)
-    out_df["value"] = out_df["value"].astype(float).round(6)
-
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    out_df.to_csv(args.output, index=False)
-    print(f"Saved ablation results: {args.output}")
+    table = pd.DataFrame(rows)
+    table.to_csv(output_root / "ablation_summary.csv", index=False)
+    with (output_root / "ablation_summary.json").open("w", encoding="utf-8") as handle:
+        json.dump(rows, handle, indent=2)
+    print(table.to_string(index=False))
 
 
 if __name__ == "__main__":
