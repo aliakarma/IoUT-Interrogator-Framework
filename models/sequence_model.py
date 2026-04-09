@@ -5,7 +5,7 @@ import torch.nn as nn
 
 
 class SequenceClassifier(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.3) -> None:
+    def __init__(self, input_dim: int, hidden_dim: int = 96, num_layers: int = 2, dropout: float = 0.3) -> None:
         super().__init__()
         self.input_dim = int(input_dim)
         self.hidden_dim = int(hidden_dim)
@@ -17,7 +17,7 @@ class SequenceClassifier(nn.Module):
 
 
 class GRUClassifier(SequenceClassifier):
-    def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.3) -> None:
+    def __init__(self, input_dim: int, hidden_dim: int = 96, num_layers: int = 2, dropout: float = 0.3) -> None:
         super().__init__(input_dim=input_dim, hidden_dim=hidden_dim, num_layers=num_layers, dropout=dropout)
         self.input_projection = nn.Linear(self.input_dim, self.hidden_dim)
         self.encoder = nn.GRU(
@@ -46,7 +46,7 @@ class GRUClassifier(SequenceClassifier):
 
 
 class LSTMClassifier(SequenceClassifier):
-    def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.3) -> None:
+    def __init__(self, input_dim: int, hidden_dim: int = 96, num_layers: int = 2, dropout: float = 0.3) -> None:
         super().__init__(input_dim=input_dim, hidden_dim=hidden_dim, num_layers=num_layers, dropout=dropout)
         self.input_projection = nn.Linear(self.input_dim, self.hidden_dim)
         self.encoder = nn.LSTM(

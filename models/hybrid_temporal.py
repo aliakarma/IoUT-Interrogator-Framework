@@ -8,8 +8,8 @@ class HybridTemporalClassifier(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dim: int = 64,
-        channels: int = 64,
+        hidden_dim: int = 96,
+        channels: int = 96,
         kernel_size: int = 5,
         dropout: float = 0.3,
     ) -> None:
