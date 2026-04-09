@@ -20,6 +20,24 @@ from training.trainer import set_global_seed
 
 
 BASELINE_MODELS = {"random", "majority", "moving_average", "rule", "logistic_regression", "random_forest", "fft"}
+NEURAL_MODELS = {"gru", "lstm", "temporal_cnn", "tcnn", "cnn", "transformer_light", "light_transformer", "transformer", "hybrid_temporal", "hybrid_cnn", "hybrid"}
+
+
+def _parse_seeds(raw: str) -> List[int]:
+    seeds: List[int] = []
+    for token in [part.strip() for part in raw.split(",") if part.strip()]:
+        if "-" in token:
+            start_text, end_text = token.split("-", 1)
+            start = int(start_text.strip())
+            end = int(end_text.strip())
+            step = 1 if end >= start else -1
+            seeds.extend(list(range(start, end + step, step)))
+        else:
+            seeds.append(int(token))
+    deduped = sorted(set(seeds))
+    if not deduped:
+        raise ValueError("At least one seed must be provided.")
+    return deduped
 
 
 def _apply_model_config(config: Dict[str, Any], model_name: str) -> Dict[str, Any]:
@@ -158,13 +176,17 @@ def main() -> None:
 
     base_config = load_config(args.config)
     model_names = [args.model] if args.model else [token.strip() for token in args.models.split(",") if token.strip()]
-    seeds = [int(token.strip()) for token in args.seeds.split(",") if token.strip()]
+    seeds = _parse_seeds(args.seeds)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    global_learning_curves_dir = Path("results") / "learning_curves"
+    global_learning_curves_dir.mkdir(parents=True, exist_ok=True)
 
     all_rows: List[Dict[str, Any]] = []
     model_summaries: Dict[str, Dict[str, Any]] = {}
+    all_histories: Dict[str, Dict[int, Dict[str, List[float]]]] = {}
+    overfitting_rows: List[Dict[str, Any]] = []
 
     for model_name in model_names:
         model_output_dir = output_dir / model_name
@@ -175,6 +197,8 @@ def main() -> None:
             run_config = _apply_model_config(base_config, model_name)
             run_config.setdefault("training", {})["seed"] = seed
             run_config["training"]["results_dir"] = str(model_output_dir / f"seed_{seed}")
+            run_config.setdefault("data", {})["use_fixed_splits"] = True
+            run_config["data"]["splits_path"] = str(run_config["data"].get("splits_path", "splits/split_v1.json"))
             set_global_seed(seed)
 
             loaders, metadata = load_data(run_config)
@@ -185,6 +209,36 @@ def main() -> None:
             row = _metrics_row(model_name, seed, train_summary, eval_summary)
             model_rows.append(row)
             all_rows.append(row)
+
+            history = train_summary.get("history", []) if isinstance(train_summary, dict) else []
+            if model_name.lower() in NEURAL_MODELS and history:
+                curves = {
+                    "train_loss": [float(epoch_row["train_loss"]) for epoch_row in history],
+                    "val_loss": [float(epoch_row["val_loss"]) for epoch_row in history],
+                }
+                all_histories.setdefault(model_name, {})[seed] = curves
+
+                model_curve_dir = model_output_dir / "learning_curves"
+                model_curve_dir.mkdir(parents=True, exist_ok=True)
+                with (model_curve_dir / f"seed_{seed}.json").open("w", encoding="utf-8") as handle:
+                    json.dump(curves, handle, indent=2)
+
+                gap_series = [float(v - t) for t, v in zip(curves["train_loss"], curves["val_loss"])]
+                gap_slope = 0.0
+                if len(gap_series) >= 2:
+                    x = np.arange(len(gap_series), dtype=np.float64)
+                    gap_slope = float(np.polyfit(x, np.asarray(gap_series, dtype=np.float64), deg=1)[0])
+                overfitting_rows.append(
+                    {
+                        "model": model_name,
+                        "seed": seed,
+                        "final_train_loss": float(curves["train_loss"][-1]),
+                        "final_val_loss": float(curves["val_loss"][-1]),
+                        "final_gap": float(gap_series[-1]),
+                        "gap_slope": gap_slope,
+                        "gap_stable_or_decreasing": bool(gap_slope <= 0.0),
+                    }
+                )
 
             seed_dir = model_output_dir / f"seed_{seed}"
             seed_dir.mkdir(parents=True, exist_ok=True)
@@ -238,6 +292,43 @@ def main() -> None:
     Path(args.final_table_output).parent.mkdir(parents=True, exist_ok=True)
     final_table.to_csv(args.final_table_output, index=False)
 
+    neural_candidates = [name for name in model_summaries.keys() if name in NEURAL_MODELS and name in all_histories]
+    best_neural_for_curves = None
+    if neural_candidates:
+        best_neural_for_curves = max(neural_candidates, key=lambda name: model_summaries[name]["aggregate"]["f1"]["mean"])
+        for seed in seeds:
+            if seed in all_histories.get(best_neural_for_curves, {}):
+                with (global_learning_curves_dir / f"seed_{seed}.json").open("w", encoding="utf-8") as handle:
+                    json.dump(all_histories[best_neural_for_curves][seed], handle, indent=2)
+
+    overfitting_summary = {
+        "rows": overfitting_rows,
+        "best_neural_model_for_learning_curves": best_neural_for_curves,
+    }
+    if overfitting_rows:
+        gaps = [float(row["final_gap"]) for row in overfitting_rows]
+        stable_count = sum(1 for row in overfitting_rows if bool(row["gap_stable_or_decreasing"]))
+        overfitting_summary["aggregate"] = {
+            "mean_final_gap": float(np.mean(gaps)),
+            "max_final_gap": float(np.max(gaps)),
+            "stable_or_decreasing_fraction": float(stable_count / len(overfitting_rows)),
+        }
+    with (output_dir / "overfitting_validation.json").open("w", encoding="utf-8") as handle:
+        json.dump(overfitting_summary, handle, indent=2)
+
+    print("Overfitting validation summary")
+    if overfitting_rows:
+        aggregate = overfitting_summary.get("aggregate", {})
+        print(
+            "mean_final_gap={:.6f} | max_final_gap={:.6f} | stable_or_decreasing_fraction={:.3f}".format(
+                float(aggregate.get("mean_final_gap", 0.0)),
+                float(aggregate.get("max_final_gap", 0.0)),
+                float(aggregate.get("stable_or_decreasing_fraction", 0.0)),
+            )
+        )
+    else:
+        print("No neural training histories were available for gap analysis.")
+
     print(
         json.dumps(
             {
@@ -245,6 +336,8 @@ def main() -> None:
                 "tests_output": args.tests_output,
                 "final_table_output": args.final_table_output,
                 "quality_report": str(Path(args.final_table_output).parent / "quality_report.json"),
+                "overfitting_validation": str(output_dir / "overfitting_validation.json"),
+                "learning_curves_dir": str(global_learning_curves_dir),
                 "all_checks_passed": criteria_payload.get("all_checks_passed", False),
             },
             indent=2,

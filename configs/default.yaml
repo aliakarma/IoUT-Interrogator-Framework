@@ -17,19 +17,19 @@ model:
   input_dim: auto
   hidden_dim: 96
   num_layers: 2
-  dropout: 0.15
-  channels: 128
+  dropout: 0.3
+  channels: 96
   kernel_size: 7
-  d_model: 64
+  d_model: 96
   nhead: 4
-  dim_feedforward: 128
+  dim_feedforward: 192
 
 training:
   seed: 42
   epochs: 14
-  early_stopping_patience: 5
-  learning_rate: 0.001
-  weight_decay: 0.0001
+  early_stopping_patience: 4
+  learning_rate: 0.0005
+  weight_decay: 0.0005
   grad_clip_norm: 1.0
   loss_type: bce
   focal_gamma: 1.5
