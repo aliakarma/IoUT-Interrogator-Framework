@@ -1,0 +1,33 @@
+data:
+  path: data/raw/behavioral_sequences.json
+  format: auto
+  seq_len: 64
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  batch_size: 32
+  num_workers: 0
+  normalize: true
+
+model:
+  type: gru
+  input_dim: auto
+  hidden_dim: 64
+  num_layers: 2
+  dropout: 0.20
+
+training:
+  seed: 42
+  epochs: 8
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  results_dir: results/run_1
+  log_dir: logs
+
+evaluation:
+  threshold: 0.50
+  save_confusion_matrix: true
+
+baseline:
+  name: logistic_regression
