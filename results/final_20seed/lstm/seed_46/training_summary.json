@@ -1,54 +1,59 @@
 {
-  "best_val_loss": 0.43543366114298504,
-  "epochs": 8,
+  "best_val_loss": 0.41204216321309406,
+  "epochs": 9,
   "checkpoint_path": "results\\final_20seed\\lstm\\seed_46\\checkpoints\\best.pt",
   "history": [
     {
       "epoch": 1,
-      "train_loss": 0.9635734704562596,
-      "val_loss": 0.7553293132781982
+      "train_loss": 1.0987841476712907,
+      "val_loss": 0.9694330565134684
     },
     {
       "epoch": 2,
-      "train_loss": 0.6477554021562849,
-      "val_loss": 0.5475554911295573
+      "train_loss": 0.8940547513961792,
+      "val_loss": 0.7341541194915772
     },
     {
       "epoch": 3,
-      "train_loss": 0.4573455116578511,
-      "val_loss": 0.4530030155181885
+      "train_loss": 0.6870837106023516,
+      "val_loss": 0.5414946397145589
     },
     {
       "epoch": 4,
-      "train_loss": 0.4211937696593148,
-      "val_loss": 0.43543366114298504
+      "train_loss": 0.5127452760083335,
+      "val_loss": 0.46287702560424804
     },
     {
       "epoch": 5,
-      "train_loss": 0.3553455297436033,
-      "val_loss": 0.4894852797190348
+      "train_loss": 0.46116828305380686,
+      "val_loss": 0.41204216321309406
     },
     {
       "epoch": 6,
-      "train_loss": 0.34711133356605256,
-      "val_loss": 0.5072741476694743
+      "train_loss": 0.4163512148175921,
+      "val_loss": 0.4787781206766764
     },
     {
       "epoch": 7,
-      "train_loss": 0.34047792094094415,
-      "val_loss": 0.5113230482737223
+      "train_loss": 0.39431828039033073,
+      "val_loss": 0.5140694618225098
     },
     {
       "epoch": 8,
-      "train_loss": 0.3307185172183173,
-      "val_loss": 0.5689692974090577
+      "train_loss": 0.3637082524810519,
+      "val_loss": 0.4402554225921631
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.3816752529995782,
+      "val_loss": 0.5166857401529948
     }
   ],
-  "params": 156865,
-  "runtime_seconds": 6.078777313232422,
+  "params": 70785,
+  "runtime_seconds": 6.895373106002808,
   "early_stopping_patience": 4,
   "loss_type": "bce",
   "focal_gamma": 1.5,
-  "train_val_loss_gap": 0.23825078019074036,
-  "overfitting_warning": true
+  "train_val_loss_gap": 0.13501048715341663,
+  "overfitting_warning": false
 }
