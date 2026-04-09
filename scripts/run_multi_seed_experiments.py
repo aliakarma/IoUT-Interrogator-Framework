@@ -1,165 +1,104 @@
-"""
-Run multi-seed simulation experiments and aggregate raw outputs.
-
-This script executes simulation + evaluation for many seeds and writes one
-combined long-format file:
-
-    seed, run_id, interval, metric_name, value
-
-Default behavior runs 20 seeds to satisfy robustness requirements.
-"""
+from __future__ import annotations
 
 import argparse
-import os
-import sys
-from typing import List, Optional
+import copy
+import json
+from pathlib import Path
+from statistics import mean, pstdev
+from typing import Any, Dict, List
 
 import pandas as pd
-from tqdm import tqdm
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from compat import ensure_supported_python
-from analysis.statistical_summary import summarize_raw_results, summarize_seed_level
-from simulation.scripts.run_simulation import build_raw_results_long, run_single_simulation
+from run_pipeline import build_model, evaluate, load_config, load_data, train
+from training.trainer import set_global_seed
 
 
-def _parse_bool(value):
-    if isinstance(value, bool):
-        return value
-    value = str(value).strip().lower()
-    if value in {"1", "true", "t", "yes", "y", "on"}:
-        return True
-    if value in {"0", "false", "f", "no", "n", "off"}:
-        return False
-    raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
-
-
-def _parse_seed_list(seed_list: Optional[str], start_seed: int, num_seeds: int) -> List[int]:
-    if seed_list:
-        seeds = []
-        for token in seed_list.split(","):
-            token = token.strip()
-            if token:
-                seeds.append(int(token))
-        if not seeds:
-            raise ValueError("--seed-list was provided but no valid seeds were parsed.")
-        return seeds
-
-    return [start_seed + i for i in range(num_seeds)]
+def _flatten_metrics(run_name: str, seed: int, train_summary: Dict[str, Any], eval_summary: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "run": run_name,
+        "seed": seed,
+        "accuracy": float(eval_summary.get("accuracy", 0.0)),
+        "precision": float(eval_summary.get("precision", 0.0)),
+        "recall": float(eval_summary.get("recall", 0.0)),
+        "f1": float(eval_summary.get("f1", 0.0)),
+        "params": int(train_summary.get("params", 0)),
+        "runtime_seconds": float(train_summary.get("runtime_seconds", 0.0)),
+    }
 
 
 def main() -> None:
-    ensure_supported_python()
-
-    parser = argparse.ArgumentParser(description="Run multi-seed IoUT simulation experiments")
-    parser.add_argument("--config", default="simulation/configs/simulation_params.json")
-    parser.add_argument("--output", default="simulation/outputs/multi_seed_raw_results.csv")
-    parser.add_argument("--summary-output", default="analysis/stats/multi_seed_summary.csv")
-
-    parser.add_argument("--start-seed", type=int, default=42)
-    parser.add_argument("--num-seeds", type=int, default=20)
-    parser.add_argument(
-        "--seed-list",
-        default=None,
-        help="Optional explicit comma-separated seed list. Overrides --start-seed/--num-seeds.",
-    )
-
-    parser.add_argument("--runs-per-seed", type=int, default=1)
-    parser.add_argument("--intervals", type=int, default=20)
-
-    parser.add_argument(
-        "--use-transformer",
-        type=_parse_bool,
-        nargs="?",
-        const=True,
-        default=True,
-        help="Use transformer trust scores inside simulation loop (default: True).",
-    )
-    parser.add_argument("--checkpoint", default="model/checkpoints/best_model.pt")
-    parser.add_argument("--model-config", default="model/configs/transformer_config.json")
-    parser.add_argument("--temperature", type=float, default=1.5)
-    parser.add_argument("--no-quantized-transformer", action="store_true")
-    parser.add_argument("--tau-min", type=float, default=None)
-    parser.add_argument("--sequence-len", type=int, default=None)
-
-    parser.add_argument("--bootstrap-samples", type=int, default=2000)
-    parser.add_argument("--ci-level", type=float, default=95.0)
+    parser = argparse.ArgumentParser(description="Run multi-seed IoUT benchmark experiments")
+    parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument("--model", default=None, help="Override model type, e.g. gru, lstm, fft, majority")
+    parser.add_argument("--seeds", default="42,43,44,45,46")
+    parser.add_argument("--output-dir", default="results/multi_seed")
+    parser.add_argument("--aggregate-output", default="results/aggregate_metrics.json")
+    parser.add_argument("--table-output", default="results/summary_table.csv")
     args = parser.parse_args()
 
-    seeds = _parse_seed_list(args.seed_list, args.start_seed, args.num_seeds)
-    if len(seeds) < 20:
-        raise ValueError(
-            f"At least 20 seeds are required. Parsed {len(seeds)} seed(s). "
-            "Use --num-seeds >= 20 or provide a longer --seed-list."
-        )
-    if args.runs_per_seed < 1:
-        raise ValueError("--runs-per-seed must be >= 1")
+    config = load_config(args.config)
+    if args.model:
+        config.setdefault("model", {})["type"] = args.model
 
-    print("\n=== Multi-Seed Experiment Runner ===")
-    print(f"  Seeds:          {len(seeds)}")
-    print(f"  Runs per seed:  {args.runs_per_seed}")
-    print(f"  Intervals:      {args.intervals}")
-    print(f"  Config:         {args.config}")
-    print(f"  Use transformer:{args.use_transformer}")
-    print(f"  Output raw:     {args.output}")
-    print(f"  Output summary: {args.summary_output}")
+    seeds = [int(token.strip()) for token in args.seeds.split(",") if token.strip()]
+    if len(seeds) != 5:
+        print(f"Running {len(seeds)} seeds; the default benchmark target is 5 seeds.")
 
-    all_raw_frames = []
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    for base_seed in tqdm(seeds, desc="Seeds"):
-        seed_results = []
+    rows: List[Dict[str, Any]] = []
 
-        for run_idx in range(args.runs_per_seed):
-            simulation_seed = base_seed + run_idx
-            result = run_single_simulation(
-                config_path=args.config,
-                seed=simulation_seed,
-                num_intervals=args.intervals,
-                use_transformer=args.use_transformer,
-                checkpoint_path=args.checkpoint,
-                model_config_path=args.model_config,
-                temperature=args.temperature,
-                quantized=not args.no_quantized_transformer,
-                tau_min_override=args.tau_min,
-                sequence_len_override=args.sequence_len,
-            )
-            seed_results.append(result)
+    for seed in seeds:
+        run_config = copy.deepcopy(config)
+        run_config.setdefault("training", {})["seed"] = seed
+        run_config["training"]["results_dir"] = str(output_dir / f"seed_{seed}")
+        set_global_seed(seed)
 
-        # Keep seed column as the experiment seed; run_id distinguishes repeats.
-        seed_raw = build_raw_results_long(seed_results, [base_seed] * args.runs_per_seed)
-        all_raw_frames.append(seed_raw)
+        loaders, metadata = load_data(run_config)
+        model = build_model(run_config, input_dim=int(metadata["input_dim"]))
+        trained_model, train_summary = train(model, loaders, run_config, metadata)
+        eval_summary = evaluate(trained_model, loaders, run_config, metadata)
 
-        seed_eval = summarize_raw_results(
-            seed_raw,
-            n_bootstrap=max(args.bootstrap_samples, 1000),
-            ci_level=args.ci_level,
-            seed=base_seed,
-        )
+        run_row = _flatten_metrics(str(run_config.get("model", {}).get("type", "unknown")), seed, train_summary, eval_summary)
+        rows.append(run_row)
 
-        key_metrics = seed_eval[seed_eval["metric_name"].isin(["accuracy_proposed", "accuracy_bayesian", "accuracy_static"])]
-        if not key_metrics.empty:
-            compact = ", ".join(
-                [f"{r.metric_name}={r.mean:.3f}" for r in key_metrics.itertuples(index=False)]
-            )
-            print(f"Seed {base_seed}: {compact}")
+        seed_dir = output_dir / f"seed_{seed}"
+        seed_dir.mkdir(parents=True, exist_ok=True)
+        with (seed_dir / "run_result.json").open("w", encoding="utf-8") as handle:
+            json.dump({"train": train_summary, "eval": eval_summary, "metadata": metadata}, handle, indent=2)
 
-    combined = pd.concat(all_raw_frames, ignore_index=True)
-    combined = combined[["seed", "run_id", "interval", "metric_name", "value"]]
+    frame = pd.DataFrame(rows)
+    frame.to_csv(output_dir / "multi_seed_results.csv", index=False)
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    combined.to_csv(args.output, index=False)
-    print(f"\nSaved multi-seed raw results: {args.output}")
+    aggregate = {
+        "seeds": seeds,
+        "accuracy": {"mean": mean(frame["accuracy"]), "std": pstdev(frame["accuracy"]) if len(frame) > 1 else 0.0},
+        "precision": {"mean": mean(frame["precision"]), "std": pstdev(frame["precision"]) if len(frame) > 1 else 0.0},
+        "recall": {"mean": mean(frame["recall"]), "std": pstdev(frame["recall"]) if len(frame) > 1 else 0.0},
+        "f1": {"mean": mean(frame["f1"]), "std": pstdev(frame["f1"]) if len(frame) > 1 else 0.0},
+        "params": int(frame["params"].iloc[0]) if len(frame) else 0,
+        "runtime_seconds": {"mean": mean(frame["runtime_seconds"]), "std": pstdev(frame["runtime_seconds"]) if len(frame) > 1 else 0.0},
+    }
 
-    multi_seed_summary = summarize_seed_level(
-        combined,
-        n_bootstrap=max(args.bootstrap_samples, 1000),
-        ci_level=args.ci_level,
-        seed=args.start_seed,
+    Path(args.aggregate_output).parent.mkdir(parents=True, exist_ok=True)
+    with Path(args.aggregate_output).open("w", encoding="utf-8") as handle:
+        json.dump(aggregate, handle, indent=2)
+
+    table = pd.DataFrame(
+        [
+            {
+                "Model": str(config.get("model", {}).get("type", "unknown")),
+                "Accuracy": aggregate["accuracy"]["mean"],
+                "F1": aggregate["f1"]["mean"],
+                "Params": aggregate["params"],
+                "Runtime": aggregate["runtime_seconds"]["mean"],
+            }
+        ]
     )
-    os.makedirs(os.path.dirname(args.summary_output), exist_ok=True)
-    multi_seed_summary.to_csv(args.summary_output, index=False)
-    print(f"Saved multi-seed summary: {args.summary_output}")
+    Path(args.table_output).parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(args.table_output, index=False)
+    print(json.dumps(aggregate, indent=2))
 
 
 if __name__ == "__main__":

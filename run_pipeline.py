@@ -32,7 +32,7 @@ def load_config(config_path: str | Path) -> Dict[str, Any]:
 def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str, Any]]:
     data_cfg = config["data"]
     records = load_records(data_cfg["path"], file_format=data_cfg.get("format", "auto"))
-    loaders, metadata = build_dataloaders(
+    loaders, metadata, _ = build_dataloaders(
         records=records,
         seq_len=int(data_cfg.get("seq_len", 64)),
         train_split=float(data_cfg.get("train_split", 0.7)),
