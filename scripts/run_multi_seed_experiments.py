@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, ttest_rel
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -69,11 +69,11 @@ def _find_best_baseline(model_summaries: Dict[str, Dict[str, Any]]) -> str | Non
 
 def _compute_statistical_tests(all_runs: pd.DataFrame, best_baseline: str | None) -> Dict[str, Any]:
     tests = {
-        "gru_vs_baseline": {"p_value": None, "baseline": best_baseline},
-        "lstm_vs_baseline": {"p_value": None, "baseline": best_baseline},
-        "temporal_cnn_vs_baseline": {"p_value": None, "baseline": best_baseline},
-        "transformer_light_vs_baseline": {"p_value": None, "baseline": best_baseline},
-        "hybrid_temporal_vs_baseline": {"p_value": None, "baseline": best_baseline},
+        "gru_vs_baseline": {"p_value": None, "test_type": "paired_t_test", "baseline": best_baseline},
+        "lstm_vs_baseline": {"p_value": None, "test_type": "paired_t_test", "baseline": best_baseline},
+        "temporal_cnn_vs_baseline": {"p_value": None, "test_type": "paired_t_test", "baseline": best_baseline},
+        "transformer_light_vs_baseline": {"p_value": None, "test_type": "paired_t_test", "baseline": best_baseline},
+        "hybrid_temporal_vs_baseline": {"p_value": None, "test_type": "paired_t_test", "baseline": best_baseline},
     }
     if not best_baseline:
         return tests
@@ -83,9 +83,12 @@ def _compute_statistical_tests(all_runs: pd.DataFrame, best_baseline: str | None
         if target not in set(all_runs["model"].tolist()):
             continue
         target_scores = all_runs[all_runs["model"] == target]["f1"].astype(float).to_numpy()
-        if len(target_scores) >= 2 and len(baseline_scores) >= 2:
-            p_value = float(ttest_ind(target_scores, baseline_scores, equal_var=False).pvalue)
+        # Paired t-test: same number of samples (same seeds), aligned evaluation
+        if len(target_scores) >= 2 and len(baseline_scores) >= 2 and len(target_scores) == len(baseline_scores):
+            p_value = float(ttest_rel(target_scores, baseline_scores, alternative='two-sided').pvalue)
             tests[f"{target}_vs_baseline"]["p_value"] = p_value
+            tests[f"{target}_vs_baseline"]["mean_diff"] = float(np.mean(target_scores) - np.mean(baseline_scores))
+            tests[f"{target}_vs_baseline"]["std_diff"] = float(np.std(target_scores - baseline_scores))
     return tests
 
 

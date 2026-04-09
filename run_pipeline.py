@@ -46,6 +46,8 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
         normalize=bool(data_cfg.get("normalize", True)),
         seed=int(config["training"].get("seed", 42)),
         strategy=str(data_cfg.get("split_strategy", "group")),
+        use_fixed_splits=bool(data_cfg.get("use_fixed_splits", True)),
+        splits_path=str(data_cfg.get("splits_path", "splits/split_v1.json")),
     )
 
     train_ids = set(metadata.get("train_sensor_ids", []))
