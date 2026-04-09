@@ -1,5 +1,0 @@
-scenario,accuracy,precision,recall,f1,threshold,n_samples,mean_probability
-clean,0.84,0.0,0.0,0.0,0.5,75.0,0.0
-gaussian_noise,0.84,0.0,0.0,0.0,0.5,75.0,0.0
-missing_segments,0.84,0.0,0.0,0.0,0.5,75.0,0.0
-sensor_failure,0.84,0.0,0.0,0.0,0.5,75.0,0.0

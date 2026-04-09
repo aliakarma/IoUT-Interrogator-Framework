@@ -127,6 +127,18 @@ These share the same dataset split and evaluation path as the GRU model, so comp
 - `python scripts/run_multi_seed_experiments.py` produces `results/aggregate_metrics.json` and `results/summary_table.csv`
 - `python scripts/generate_summary_table.py` scans result folders and emits CSV and Markdown summary tables
 
+## Reproducible Results
+
+This repository contains only final 20-seed experimental results.
+
+Intermediate experiments (smoke tests, iterations) are excluded for clarity.
+
+All reported results can be reproduced using:
+
+```bash
+python scripts/run_multi_seed_experiments.py --seeds 42-61
+```
+
 ## Notes
 
 The repository still includes legacy analysis and simulation code for prior experiments, but the recommended production entry point is now `run_pipeline.py`.
