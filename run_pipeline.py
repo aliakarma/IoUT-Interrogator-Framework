@@ -70,7 +70,7 @@ def build_model(config: Dict[str, Any], input_dim: int):
     if model_type == "gru":
         return GRUClassifier(
             input_dim=input_dim,
-            hidden_dim=int(model_cfg.get("hidden_dim", 96)),
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
             num_layers=int(model_cfg.get("num_layers", 2)),
             dropout=float(model_cfg.get("dropout", 0.3)),
         )
@@ -78,7 +78,7 @@ def build_model(config: Dict[str, Any], input_dim: int):
     if model_type == "lstm":
         return LSTMClassifier(
             input_dim=input_dim,
-            hidden_dim=int(model_cfg.get("hidden_dim", 96)),
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
             num_layers=int(model_cfg.get("num_layers", 2)),
             dropout=float(model_cfg.get("dropout", 0.3)),
         )
@@ -86,8 +86,8 @@ def build_model(config: Dict[str, Any], input_dim: int):
     if model_type in {"temporal_cnn", "tcnn", "cnn"}:
         return TemporalCNNClassifier(
             input_dim=input_dim,
-            hidden_dim=int(model_cfg.get("hidden_dim", 96)),
-            channels=int(model_cfg.get("channels", 96)),
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
+            channels=int(model_cfg.get("channels", 64)),
             kernel_size=int(model_cfg.get("kernel_size", 5)),
             dropout=float(model_cfg.get("dropout", 0.3)),
         )
@@ -95,8 +95,8 @@ def build_model(config: Dict[str, Any], input_dim: int):
     if model_type in {"hybrid_temporal", "hybrid_cnn", "hybrid"}:
         return HybridTemporalClassifier(
             input_dim=input_dim,
-            hidden_dim=int(model_cfg.get("hidden_dim", 96)),
-            channels=int(model_cfg.get("channels", 96)),
+            hidden_dim=int(model_cfg.get("hidden_dim", 64)),
+            channels=int(model_cfg.get("channels", 64)),
             kernel_size=int(model_cfg.get("kernel_size", 5)),
             dropout=float(model_cfg.get("dropout", 0.3)),
         )
@@ -104,10 +104,10 @@ def build_model(config: Dict[str, Any], input_dim: int):
     if model_type in {"transformer_light", "light_transformer", "transformer"}:
         return LightweightTransformerClassifier(
             input_dim=input_dim,
-            d_model=int(model_cfg.get("d_model", 96)),
+            d_model=int(model_cfg.get("d_model", 64)),
             nhead=int(model_cfg.get("nhead", 4)),
             num_layers=int(model_cfg.get("num_layers", 3)),
-            dim_feedforward=int(model_cfg.get("dim_feedforward", 192)),
+            dim_feedforward=int(model_cfg.get("dim_feedforward", 128)),
             dropout=float(model_cfg.get("dropout", 0.3)),
         )
 

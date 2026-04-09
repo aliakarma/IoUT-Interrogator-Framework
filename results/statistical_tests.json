@@ -5,9 +5,11 @@
     "baseline": "random_forest"
   },
   "lstm_vs_baseline": {
-    "p_value": null,
+    "p_value": 0.00012561099343373782,
     "test_type": "paired_t_test",
-    "baseline": "random_forest"
+    "baseline": "random_forest",
+    "mean_diff": -0.09107983572043321,
+    "std_diff": 0.08278013312332502
   },
   "temporal_cnn_vs_baseline": {
     "p_value": null,
@@ -20,10 +22,10 @@
     "baseline": "random_forest"
   },
   "hybrid_temporal_vs_baseline": {
-    "p_value": 0.0009166540234142322,
+    "p_value": 0.0075315081323390045,
     "test_type": "paired_t_test",
     "baseline": "random_forest",
-    "mean_diff": 0.0443804323060617,
-    "std_diff": 0.04933046697646548
+    "mean_diff": 0.04371633961228805,
+    "std_diff": 0.06373723782694525
   }
 }

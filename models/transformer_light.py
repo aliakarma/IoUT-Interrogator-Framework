@@ -24,10 +24,10 @@ class LightweightTransformerClassifier(nn.Module):
     def __init__(
         self,
         input_dim: int,
-        d_model: int = 96,
+        d_model: int = 64,
         nhead: int = 4,
         num_layers: int = 2,
-        dim_feedforward: int = 192,
+        dim_feedforward: int = 128,
         dropout: float = 0.3,
     ) -> None:
         super().__init__()

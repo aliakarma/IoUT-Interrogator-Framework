@@ -16,8 +16,7 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return json.load(handle)
 
 
-def _best_model_and_seed(results_dir: Path) -> Tuple[str, int, Dict[str, Any]]:
-    aggregate_path = results_dir / "aggregate_metrics.json"
+def _best_model_and_seed(results_dir: Path, aggregate_path: Path) -> Tuple[str, int, Dict[str, Any]]:
     aggregate = _read_json(aggregate_path)
     model_map = aggregate.get("models", {})
     if not model_map:
@@ -52,6 +51,7 @@ def _write_json(path: Path, payload: Dict[str, Any]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate publication-ready figures from real experiment outputs")
     parser.add_argument("--results-dir", default="results/final_20seed")
+    parser.add_argument("--aggregate-path", default="results/aggregate_metrics.json")
     parser.add_argument("--figures-dir", default="results/figures")
     parser.add_argument("--figures-data-dir", default="results/figures_data")
     parser.add_argument("--learning-curves-dir", default="results/learning_curves")
@@ -66,7 +66,7 @@ def main() -> None:
     figures_dir.mkdir(parents=True, exist_ok=True)
     figures_data_dir.mkdir(parents=True, exist_ok=True)
 
-    best_model, best_seed, aggregate = _best_model_and_seed(results_dir)
+    best_model, best_seed, aggregate = _best_model_and_seed(results_dir, Path(args.aggregate_path))
     seeds = [int(seed) for seed in aggregate.get("seeds", [])]
 
     learning_curve_path = learning_curves_dir / f"seed_{args.seed}.json"

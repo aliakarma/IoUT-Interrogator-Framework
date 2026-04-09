@@ -1,0 +1,54 @@
+{
+  "best_val_loss": 0.48372621536254884,
+  "epochs": 8,
+  "checkpoint_path": "results\\final_20seed\\lstm\\seed_42\\checkpoints\\best.pt",
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.0971147230693272,
+      "val_loss": 0.9315949090321859
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.8046589459691729,
+      "val_loss": 0.6157684389750163
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.522912929398673,
+      "val_loss": 0.4925418440500895
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.41705604408468516,
+      "val_loss": 0.48372621536254884
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.4044702999932425,
+      "val_loss": 0.5044222704569499
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.36498607328959876,
+      "val_loss": 0.5370089308420817
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.36976956605911254,
+      "val_loss": 0.5384880224863688
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.3313046300411224,
+      "val_loss": 0.5312156009674073
+    }
+  ],
+  "params": 156865,
+  "runtime_seconds": 6.079650402069092,
+  "early_stopping_patience": 4,
+  "loss_type": "bce",
+  "focal_gamma": 1.5,
+  "train_val_loss_gap": 0.19991097092628485,
+  "overfitting_warning": false
+}
