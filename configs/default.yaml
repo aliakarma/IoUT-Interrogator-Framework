@@ -14,13 +14,13 @@ data:
 
 model:
   type: hybrid_temporal
-  input_dim: auto
+  hidden_dim: 96
   hidden_dim: 64
   num_layers: 2
-  dropout: 0.3
+  channels: 96
   channels: 64
-  kernel_size: 7
-  d_model: 64
+  d_model: 96
+  dim_feedforward: 192
   nhead: 4
   dim_feedforward: 128
 
