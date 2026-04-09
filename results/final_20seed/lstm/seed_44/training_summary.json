@@ -1,49 +1,59 @@
 {
-  "best_val_loss": 0.48254725138346355,
-  "epochs": 7,
+  "best_val_loss": 0.47974811553955077,
+  "epochs": 9,
   "checkpoint_path": "results\\final_20seed\\lstm\\seed_44\\checkpoints\\best.pt",
   "history": [
     {
       "epoch": 1,
-      "train_loss": 1.082142962047032,
-      "val_loss": 0.9018327935536703
+      "train_loss": 1.1135610982349942,
+      "val_loss": 0.9714017327626546
     },
     {
       "epoch": 2,
-      "train_loss": 0.7828504402296884,
-      "val_loss": 0.5878816906611125
+      "train_loss": 0.9323194115502493,
+      "val_loss": 0.7684686470031739
     },
     {
       "epoch": 3,
-      "train_loss": 0.5236911027772087,
-      "val_loss": 0.48254725138346355
+      "train_loss": 0.7136964930806842,
+      "val_loss": 0.6023991552988688
     },
     {
       "epoch": 4,
-      "train_loss": 0.4037878041607993,
-      "val_loss": 0.48702946027119953
+      "train_loss": 0.5618571104322161,
+      "val_loss": 0.5261405817667644
     },
     {
       "epoch": 5,
-      "train_loss": 0.37293581868921005,
-      "val_loss": 0.5231728839874268
+      "train_loss": 0.44918764625276836,
+      "val_loss": 0.47974811553955077
     },
     {
       "epoch": 6,
-      "train_loss": 0.3446288866656167,
-      "val_loss": 0.5308894602457682
+      "train_loss": 0.4596492000137057,
+      "val_loss": 0.48770151456197103
     },
     {
       "epoch": 7,
-      "train_loss": 0.3225298498358045,
-      "val_loss": 0.5636541557312011
+      "train_loss": 0.42846517384052274,
+      "val_loss": 0.4936452070871989
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.43292808055877685,
+      "val_loss": 0.5160825983683268
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.40021901266915455,
+      "val_loss": 0.50930757522583
     }
   ],
-  "params": 156865,
-  "runtime_seconds": 6.180577993392944,
+  "params": 70785,
+  "runtime_seconds": 7.52290415763855,
   "early_stopping_patience": 4,
   "loss_type": "bce",
   "focal_gamma": 1.5,
-  "train_val_loss_gap": 0.24112430589539663,
-  "overfitting_warning": true
+  "train_val_loss_gap": 0.10908856255667548,
+  "overfitting_warning": false
 }
