@@ -1,0 +1,15 @@
+{
+  "accuracy": 0.49333333333333335,
+  "precision": 0.15789473684210525,
+  "recall": 0.5,
+  "f1": 0.23999999999999996,
+  "threshold": 0.5,
+  "n_samples": 75,
+  "mean_probability": 0.47136643528938293,
+  "confusion_matrix": {
+    "tn": 31,
+    "fp": 32,
+    "fn": 6,
+    "tp": 6
+  }
+}
