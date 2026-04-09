@@ -69,3 +69,22 @@ Thumbs.db
 
 # Go module cache (created by go toolchain during dependency resolution)
 root/
+
+# Temporary experiment outputs
+results/*_smoke/
+results/*_iteration*/
+results/*_science/
+results/run_*/
+
+# Old multi-seed runs
+results/multi_seed_final/
+results/multi_seed_iteration*/
+results/multi_seed_smoke/
+
+# Old robustness runs
+results/robustness_smoke/
+results/robustness_iteration*/
+results/robustness_science/
+
+# Local archive for non-final artifacts
+results/archive/

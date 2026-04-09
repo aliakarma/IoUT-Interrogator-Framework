@@ -1,0 +1,54 @@
+{
+  "best_model": "hybrid_temporal",
+  "best_baseline": "random_forest",
+  "best_model_metrics": {
+    "accuracy": {
+      "mean": 0.9286666666666666,
+      "std": 0.01477234653744023
+    },
+    "balanced_accuracy": {
+      "mean": 0.8276785714285714,
+      "std": 0.03436193463194831
+    },
+    "precision": {
+      "mean": 0.8593968531468531,
+      "std": 0.0959431973008294
+    },
+    "recall": {
+      "mean": 0.6791666666666667,
+      "std": 0.07580585582775105
+    },
+    "f1": {
+      "mean": 0.7524416921751018,
+      "std": 0.048271206860215805
+    },
+    "roc_auc": {
+      "mean": 0.9673941798941799,
+      "std": 0.009892154887135424
+    },
+    "pr_auc": {
+      "mean": 0.8814277576221736,
+      "std": 0.024992549481939803
+    },
+    "runtime_seconds": {
+      "mean": 3.2598571181297302,
+      "std": 0.5400620986309401
+    },
+    "params": {
+      "mean": 240689.0,
+      "std": 0.0
+    }
+  },
+  "best_baseline_f1": 0.7080612598690402,
+  "f1_margin_vs_best_baseline": 0.04438043230606159,
+  "p_value": 0.0009166540234142322,
+  "checks": {
+    "f1_ge_0_75": true,
+    "balanced_accuracy_ge_0_80": true,
+    "roc_auc_ge_0_90": true,
+    "f1_std_le_0_10": true,
+    "p_value_lt_0_05": true,
+    "baseline_margin_gt_0_05": false
+  },
+  "all_checks_passed": false
+}
