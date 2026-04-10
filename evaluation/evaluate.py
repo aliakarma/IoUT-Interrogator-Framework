@@ -8,6 +8,7 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import torch
 from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import recall_score
 
 from evaluation.metrics import compute_metrics
 
@@ -53,8 +54,13 @@ def tune_threshold(
     _, y_prob = _predict_with_model(model, val_loader, threshold=0.5)
     for threshold in thresholds:
         y_pred = (y_prob >= threshold).astype(np.int64)
-        metrics = compute_metrics(y_true_arr, y_pred, y_prob=y_prob)
-        score = float(metrics.get(metric_name, 0.0))
+        if metric_name == "balanced_recall":
+            recall_0 = recall_score(y_true_arr, y_pred, pos_label=0, zero_division=0)
+            recall_1 = recall_score(y_true_arr, y_pred, pos_label=1, zero_division=0)
+            score = float((recall_0 + recall_1) / 2.0)
+        else:
+            metrics = compute_metrics(y_true_arr, y_pred, y_prob=y_prob)
+            score = float(metrics.get(metric_name, 0.0))
         if score > best_score:
             best_score = score
             best_threshold = float(threshold)

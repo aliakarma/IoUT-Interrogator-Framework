@@ -11,7 +11,16 @@ def extract_behavioral_features(df: pd.DataFrame) -> np.ndarray:
 
     This is an approximation layer and does not claim one-to-one feature equivalence.
     """
-    required = {"dur", "spkts", "ct_dst_ltm", "ct_srv_src", "state"}
+    required = {
+        "dur",
+        "spkts",
+        "dpkts",
+        "ct_dst_ltm",
+        "ct_srv_src",
+        "ct_src_ltm",
+        "ct_dst_src_ltm",
+        "state",
+    }
     missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"Missing required UNSW feature columns: {missing}")
@@ -20,6 +29,9 @@ def extract_behavioral_features(df: pd.DataFrame) -> np.ndarray:
     spkts = pd.to_numeric(df["spkts"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
     ct_dst_ltm = pd.to_numeric(df["ct_dst_ltm"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
     ct_srv_src = pd.to_numeric(df["ct_srv_src"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
+    ct_src_ltm = pd.to_numeric(df["ct_src_ltm"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
+    ct_dst_src_ltm = pd.to_numeric(df["ct_dst_src_ltm"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
+    dpkts = pd.to_numeric(df["dpkts"], errors="coerce").fillna(0.0).to_numpy(dtype=np.float32)
     state = df["state"].fillna("UNK").astype(str)
 
     features = []
@@ -35,6 +47,15 @@ def extract_behavioral_features(df: pd.DataFrame) -> np.ndarray:
 
     # Neighbor churn proxy
     features.append(ct_srv_src)
+
+    # Source host connection persistence
+    features.append(ct_src_ltm)
+
+    # Source-destination pair interaction intensity
+    features.append(ct_dst_src_ltm)
+
+    # Directional packet-flow imbalance
+    features.append(spkts - dpkts)
 
     # Protocol anomaly proxy
     features.append((state != "CON").astype(np.float32).to_numpy())

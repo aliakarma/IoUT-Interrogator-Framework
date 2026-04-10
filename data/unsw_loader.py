@@ -10,7 +10,16 @@ import pandas as pd
 from data.real_dataset_adapter import build_sequences, extract_behavioral_features, normalize_features
 
 
-UNSW_REQUIRED_COLUMNS = {"dur", "spkts", "ct_dst_ltm", "ct_srv_src", "state"}
+UNSW_REQUIRED_COLUMNS = {
+    "dur",
+    "spkts",
+    "dpkts",
+    "ct_dst_ltm",
+    "ct_srv_src",
+    "ct_src_ltm",
+    "ct_dst_src_ltm",
+    "state",
+}
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:

@@ -64,6 +64,7 @@ def fit_model(
     results_dir: Path,
     log_dir: Path,
     input_dim: int,
+    train_class_counts: Dict[str, int] | None = None,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     logger = logging.getLogger("iout.training")
     start_time = time.time()
@@ -81,10 +82,16 @@ def fit_model(
 
     positive_count = 0
     negative_count = 0
-    for batch in train_loader:
-        labels = batch["label"].numpy()
-        positive_count += int(labels.sum())
-        negative_count += int(len(labels) - labels.sum())
+    if train_class_counts is not None:
+        negative_count = int(train_class_counts.get("0", 0))
+        positive_count = int(train_class_counts.get("1", 0))
+
+    if positive_count <= 0 or negative_count <= 0:
+        for batch in train_loader:
+            labels = batch["label"].detach().cpu().numpy()
+            positive_count += int(labels.sum())
+            negative_count += int(len(labels) - labels.sum())
+
     pos_weight = torch.tensor([negative_count / max(positive_count, 1)], dtype=torch.float32, device=device)
 
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -150,6 +157,8 @@ def fit_model(
         "early_stopping_patience": early_stopping_patience,
         "loss_type": loss_type,
         "focal_gamma": focal_gamma,
+        "train_class_counts": {"0": int(negative_count), "1": int(positive_count)},
+        "pos_weight": float(negative_count / max(positive_count, 1)),
     }
     if history:
         final_gap = float(history[-1]["val_loss"] - history[-1]["train_loss"])

@@ -1,0 +1,13 @@
+{
+  "class_balance_ok": true,
+  "recall_class_0_ok": true,
+  "recall_class_1_ok": true,
+  "balanced_accuracy_ok": true,
+  "f1_realistic": true,
+  "roc_auc_ok": true,
+  "pr_auc_ok": true,
+  "no_leakage_warnings": true,
+  "std_non_degenerate": true,
+  "metrics_realistic": true,
+  "all_conditions_met": true
+}
