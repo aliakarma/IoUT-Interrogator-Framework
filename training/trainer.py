@@ -72,10 +72,10 @@ def fit_model(
 
     training_cfg = config["training"]
     epochs = int(training_cfg.get("epochs", 8))
-    lr = float(training_cfg.get("learning_rate", 1e-3))
-    weight_decay = float(training_cfg.get("weight_decay", 0.0))
+    lr = float(training_cfg.get("learning_rate", 5e-4))
+    weight_decay = float(training_cfg.get("weight_decay", 5e-4))
     grad_clip_norm = float(training_cfg.get("grad_clip_norm", 1.0))
-    early_stopping_patience = int(training_cfg.get("early_stopping_patience", 3))
+    early_stopping_patience = int(training_cfg.get("early_stopping_patience", 4))
     loss_type = str(training_cfg.get("loss_type", "bce"))
     focal_gamma = float(training_cfg.get("focal_gamma", 1.5))
 

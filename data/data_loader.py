@@ -202,6 +202,21 @@ def validate_splits(
             raise AssertionError(
                 f"Temporal leakage detected: train_max={train_max}, val_min={val_min}, test_min={test_min}"
             )
+
+    def _assert_both_classes(split_name: str, split_samples: Sequence[SensorSequence]) -> None:
+        labels = [int(sample.label) for sample in split_samples]
+        positives = int(sum(labels))
+        negatives = int(len(labels) - positives)
+        if positives <= 0 or negatives <= 0:
+            raise AssertionError(
+                f"Invalid split '{split_name}': positives={positives}, negatives={negatives}. "
+                "Both classes must be present in train/val/test."
+            )
+
+    _assert_both_classes("train", train)
+    _assert_both_classes("val", val)
+    _assert_both_classes("test", test)
+
     return overlaps
 
 
@@ -248,11 +263,13 @@ def create_fixed_splits(
     val_split: float = 0.15,
     test_split: float = 0.15,
     seed: int = 42,
+    temporal_gap: int = 0,
 ) -> Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]:
-    """
-    Create fixed splits and save indices. On subsequent calls, reuse saved indices.
+    """Create fixed splits and save indices. On subsequent calls, reuse saved indices.
     
     This ensures the SAME test set is used across all seeds.
+    
+    For time-based splits, temporal_gap prevents sequence overlap in sliding-window datasets.
     """
     output_path = Path(output_path)
     samples = list(data)
@@ -261,12 +278,15 @@ def create_fixed_splits(
     
     # Try to load existing splits
     if output_path.exists():
-        train_idx, val_idx, test_idx = load_split_indices(output_path)
-        train = [samples[i] for i in train_idx]
-        val = [samples[i] for i in val_idx]
-        test = [samples[i] for i in test_idx]
-        validate_splits(train, val, test, strategy=strategy)
-        return train, val, test
+        try:
+            train_idx, val_idx, test_idx = load_split_indices(output_path)
+            train = [samples[i] for i in train_idx]
+            val = [samples[i] for i in val_idx]
+            test = [samples[i] for i in test_idx]
+            validate_splits(train, val, test, strategy=strategy)
+            return train, val, test
+        except AssertionError as exc:
+            print(f"[Split Validation] Existing fixed split is invalid ({exc}); regenerating.")
     
     # Create new splits
     train, val, test = create_splits(
@@ -276,6 +296,7 @@ def create_fixed_splits(
         val_split=val_split,
         test_split=test_split,
         seed=seed,
+        temporal_gap=temporal_gap,
     )
     
     # Map back to indices
@@ -297,7 +318,13 @@ def create_splits(
     val_split: float = 0.15,
     test_split: float = 0.15,
     seed: int = 42,
+    temporal_gap: int = 0,
 ) -> Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]:
+    """Create train/val/test splits.
+    
+    For time-based splits, temporal_gap skips samples between train-val and val-test
+    to prevent sequence overlap in sliding-window datasets like UNSW-NB15.
+    """
     samples = list(data)
     if not samples:
         raise ValueError("Cannot split an empty dataset.")
@@ -356,11 +383,60 @@ def create_splits(
             if n_test <= 0:
                 n_test = 1
                 n_train = max(1, n_train - 1)
+            
+            # Apply temporal gap to prevent sequence overlap in sliding-window datasets
             train = ordered[:n_train]
-            val = ordered[n_train : n_train + n_val]
-            test = ordered[n_train + n_val : n_train + n_val + n_test]
+            val_start = n_train + temporal_gap
+            val = ordered[val_start : val_start + n_val]
+            test_start = val_start + n_val + temporal_gap
+            test = ordered[test_start:test_start + n_test]
+            
+            # Validate split boundaries
+            if temporal_gap > 0:
+                print(f"[Temporal Gap] Split indices: train[0:{n_train}], gap[{n_train}:{val_start}], val[{val_start}:{val_start+len(val)}], gap[{val_start+len(val)}:{test_start}], test[{test_start}:{test_start+len(test)}]")
+
+    elif strategy == "stratified_ordered":
+        # Preserve temporal order while ensuring both classes are represented in each split.
+        ordered = sorted(samples, key=lambda sample: (_time_key(sample), sample.sensor_id))
+        negatives = [sample for sample in ordered if int(sample.label) == 0]
+        positives = [sample for sample in ordered if int(sample.label) == 1]
+
+        def _split_one_class(class_samples: List[SensorSequence]) -> Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]:
+            count = len(class_samples)
+            if count < 3:
+                raise ValueError("Need at least 3 samples per class for stratified_ordered split")
+            n_train = max(1, int(round(count * train_split)))
+            n_val = max(1, int(round(count * val_split)))
+            if n_train + n_val >= count:
+                n_train = max(1, count - 2)
+                n_val = 1
+            n_test = count - n_train - n_val
+            if n_test <= 0:
+                n_test = 1
+                n_train = max(1, n_train - 1)
+
+            cls_train = class_samples[:n_train]
+            cls_val = class_samples[n_train:n_train + n_val]
+            cls_test = class_samples[n_train + n_val:n_train + n_val + n_test]
+            return cls_train, cls_val, cls_test
+
+        neg_train, neg_val, neg_test = _split_one_class(negatives)
+        pos_train, pos_val, pos_test = _split_one_class(positives)
+
+        train = sorted(neg_train + pos_train, key=lambda sample: (_time_key(sample), sample.sensor_id))
+        val = sorted(neg_val + pos_val, key=lambda sample: (_time_key(sample), sample.sensor_id))
+        test = sorted(neg_test + pos_test, key=lambda sample: (_time_key(sample), sample.sensor_id))
+
+        if temporal_gap > 0:
+            if len(train) > temporal_gap:
+                train = train[:-temporal_gap]
+            if len(val) > (2 * temporal_gap):
+                val = val[temporal_gap:-temporal_gap]
+            if len(test) > temporal_gap:
+                test = test[temporal_gap:]
+
     else:
-        raise ValueError("strategy must be 'group' or 'time'")
+        raise ValueError("strategy must be 'group', 'time', or 'stratified_ordered'")
 
     validate_splits(train, val, test, strategy=strategy)
     return train, val, test
@@ -426,6 +502,7 @@ def build_dataloaders(
     strategy: str = "group",
     use_fixed_splits: bool = True,
     splits_path: str | Path = "splits/split_v1.json",
+    temporal_gap: int = 0,
 ) -> Tuple[Dict[str, DataLoader], Dict[str, Any], Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]]:
     samples = list(records) if records and isinstance(records[0], SensorSequence) else _records_to_sequences(records)  # type: ignore[index]
     
@@ -438,6 +515,7 @@ def build_dataloaders(
             val_split=val_split,
             test_split=test_split,
             seed=seed,
+            temporal_gap=temporal_gap,
         )
     else:
         train_samples, val_samples, test_samples = create_splits(
@@ -447,9 +525,22 @@ def build_dataloaders(
             val_split=val_split,
             test_split=test_split,
             seed=seed,
+            temporal_gap=temporal_gap,
         )
 
-    normalizer = SequenceNormalizer().fit([sample.signals for sample in train_samples]) if normalize else None
+    # ===== CRITICAL: Fit normalizer ONLY on training data =====
+    normalizer = None
+    if normalize:
+        # Extract signals from training samples only
+        train_signals = [sample.signals for sample in train_samples]
+        normalizer = SequenceNormalizer().fit(train_signals)
+        # Verify normalizer was fit on training data
+        assert hasattr(normalizer, 'mean_') and hasattr(normalizer, 'std_'), \
+            "Normalizer fit failed: missing mean_/std_ attributes"
+        assert normalizer.mean_ is not None and normalizer.std_ is not None, \
+            "Normalizer fit failed: mean_/std_ are None"
+        print(f"[Scaler Validation] ✓ Normalizer fitted on {len(train_samples)} training sequences only")
+        print(f"[Scaler Validation] ✓ Mean shape: {normalizer.mean_.shape}, Std shape: {normalizer.std_.shape}")
 
     train_dataset = IoUTDataset(train_samples, seq_len=seq_len, normalizer=normalizer)
     val_dataset = IoUTDataset(val_samples, seq_len=seq_len, normalizer=normalizer)
@@ -461,18 +552,44 @@ def build_dataloaders(
         "test": DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=_collate_fn(seq_len)),
     }
 
+    # ===== DEBUG: Class distribution validation =====
+    train_labels = np.array([int(s.label) for s in train_samples])
+    val_labels = np.array([int(s.label) for s in val_samples])
+    test_labels = np.array([int(s.label) for s in test_samples])
+    
+    print(f"\n[Class Distribution]")
+    print(f"  Train: {train_labels.sum()} anomalies, {(1-train_labels).sum()} normal (pos_rate={train_labels.mean():.4f})")
+    print(f"  Val:   {val_labels.sum()} anomalies, {(1-val_labels).sum()} normal (pos_rate={val_labels.mean():.4f})")
+    print(f"  Test:  {test_labels.sum()} anomalies, {(1-test_labels).sum()} normal (pos_rate={test_labels.mean():.4f})")
+    
+    # Warn if significant class distribution shift
+    all_labels = np.concatenate([train_labels, val_labels, test_labels])
+    overall_pos_rate = all_labels.mean()
+    train_shift = abs(train_labels.mean() - overall_pos_rate)
+    val_shift = abs(val_labels.mean() - overall_pos_rate)
+    test_shift = abs(test_labels.mean() - overall_pos_rate)
+    
+    if train_shift > 0.05 or val_shift > 0.05 or test_shift > 0.05:
+        print(f"⚠️  [Class Distribution Warning] Significant shift detected:")
+        print(f"   Overall pos_rate: {overall_pos_rate:.4f}")
+        print(f"   Train shift: {train_shift:.4f}  |  Val shift: {val_shift:.4f}  |  Test shift: {test_shift:.4f}")
+
     feature_dim = int(train_samples[0].signals.shape[-1]) if train_samples else int(samples[0].signals.shape[-1])
     dataset_statistics = compute_dataset_statistics(samples)
 
     metadata = {
         "input_dim": feature_dim,
         "split_strategy": strategy,
+        "temporal_gap": temporal_gap,
         "n_train": len(train_dataset),
         "n_val": len(val_dataset),
         "n_test": len(test_dataset),
         "train_sensor_ids": [sample.sensor_id for sample in train_samples],
         "val_sensor_ids": [sample.sensor_id for sample in val_samples],
         "test_sensor_ids": [sample.sensor_id for sample in test_samples],
+        "train_pos_rate": float(train_labels.mean()),
+        "val_pos_rate": float(val_labels.mean()),
+        "test_pos_rate": float(test_labels.mean()),
         "dataset_statistics": dataset_statistics,
     }
     return loaders, metadata, (train_samples, val_samples, test_samples)

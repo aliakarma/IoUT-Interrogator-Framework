@@ -75,6 +75,9 @@ results/*_smoke/
 results/*_iteration*/
 results/*_science/
 results/run_*/
+results/ablation*
+results/robustness*
+results/*smoke*
 
 # Old multi-seed runs
 results/multi_seed_final/
@@ -88,3 +91,26 @@ results/robustness_science/
 
 # Local archive for non-final artifacts
 results/archive/
+
+# Cache and temp
+*.tmp
+*.cache
+
+# Python cache
+__pycache__/
+
+# Checkpoints and model binaries
+*.pt
+*.pth
+
+# Keep only final result directories tracked
+!results/
+!results/synthetic_final/
+!results/synthetic_final/**
+!results/unsw_final/
+!results/unsw_final/**
+
+data/raw/unsw_nb15/UNSW-NB15_1.csv
+data/raw/unsw_nb15/UNSW-NB15_2.csv
+data/raw/unsw_nb15/UNSW-NB15_3.csv
+data/raw/unsw_nb15/UNSW-NB15_4.csv
