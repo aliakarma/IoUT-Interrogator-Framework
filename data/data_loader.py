@@ -202,6 +202,21 @@ def validate_splits(
             raise AssertionError(
                 f"Temporal leakage detected: train_max={train_max}, val_min={val_min}, test_min={test_min}"
             )
+
+    def _assert_both_classes(split_name: str, split_samples: Sequence[SensorSequence]) -> None:
+        labels = [int(sample.label) for sample in split_samples]
+        positives = int(sum(labels))
+        negatives = int(len(labels) - positives)
+        if positives <= 0 or negatives <= 0:
+            raise AssertionError(
+                f"Invalid split '{split_name}': positives={positives}, negatives={negatives}. "
+                "Both classes must be present in train/val/test."
+            )
+
+    _assert_both_classes("train", train)
+    _assert_both_classes("val", val)
+    _assert_both_classes("test", test)
+
     return overlaps
 
 
@@ -263,12 +278,15 @@ def create_fixed_splits(
     
     # Try to load existing splits
     if output_path.exists():
-        train_idx, val_idx, test_idx = load_split_indices(output_path)
-        train = [samples[i] for i in train_idx]
-        val = [samples[i] for i in val_idx]
-        test = [samples[i] for i in test_idx]
-        validate_splits(train, val, test, strategy=strategy)
-        return train, val, test
+        try:
+            train_idx, val_idx, test_idx = load_split_indices(output_path)
+            train = [samples[i] for i in train_idx]
+            val = [samples[i] for i in val_idx]
+            test = [samples[i] for i in test_idx]
+            validate_splits(train, val, test, strategy=strategy)
+            return train, val, test
+        except AssertionError as exc:
+            print(f"[Split Validation] Existing fixed split is invalid ({exc}); regenerating.")
     
     # Create new splits
     train, val, test = create_splits(
@@ -377,8 +395,48 @@ def create_splits(
             if temporal_gap > 0:
                 print(f"[Temporal Gap] Split indices: train[0:{n_train}], gap[{n_train}:{val_start}], val[{val_start}:{val_start+len(val)}], gap[{val_start+len(val)}:{test_start}], test[{test_start}:{test_start+len(test)}]")
 
+    elif strategy == "stratified_ordered":
+        # Preserve temporal order while ensuring both classes are represented in each split.
+        ordered = sorted(samples, key=lambda sample: (_time_key(sample), sample.sensor_id))
+        negatives = [sample for sample in ordered if int(sample.label) == 0]
+        positives = [sample for sample in ordered if int(sample.label) == 1]
+
+        def _split_one_class(class_samples: List[SensorSequence]) -> Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]:
+            count = len(class_samples)
+            if count < 3:
+                raise ValueError("Need at least 3 samples per class for stratified_ordered split")
+            n_train = max(1, int(round(count * train_split)))
+            n_val = max(1, int(round(count * val_split)))
+            if n_train + n_val >= count:
+                n_train = max(1, count - 2)
+                n_val = 1
+            n_test = count - n_train - n_val
+            if n_test <= 0:
+                n_test = 1
+                n_train = max(1, n_train - 1)
+
+            cls_train = class_samples[:n_train]
+            cls_val = class_samples[n_train:n_train + n_val]
+            cls_test = class_samples[n_train + n_val:n_train + n_val + n_test]
+            return cls_train, cls_val, cls_test
+
+        neg_train, neg_val, neg_test = _split_one_class(negatives)
+        pos_train, pos_val, pos_test = _split_one_class(positives)
+
+        train = sorted(neg_train + pos_train, key=lambda sample: (_time_key(sample), sample.sensor_id))
+        val = sorted(neg_val + pos_val, key=lambda sample: (_time_key(sample), sample.sensor_id))
+        test = sorted(neg_test + pos_test, key=lambda sample: (_time_key(sample), sample.sensor_id))
+
+        if temporal_gap > 0:
+            if len(train) > temporal_gap:
+                train = train[:-temporal_gap]
+            if len(val) > (2 * temporal_gap):
+                val = val[temporal_gap:-temporal_gap]
+            if len(test) > temporal_gap:
+                test = test[temporal_gap:]
+
     else:
-        raise ValueError("strategy must be 'group' or 'time'")
+        raise ValueError("strategy must be 'group', 'time', or 'stratified_ordered'")
 
     validate_splits(train, val, test, strategy=strategy)
     return train, val, test

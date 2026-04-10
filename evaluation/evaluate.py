@@ -38,7 +38,7 @@ def tune_threshold(
     metric_name: str = "f1",
     candidate_thresholds: list[float] | None = None,
 ) -> float:
-    thresholds = candidate_thresholds or [float(value) for value in np.linspace(0.05, 0.95, 19)]
+    thresholds = candidate_thresholds or [float(value) for value in np.linspace(0.2, 0.8, 13)]
     best_threshold = 0.5
     best_score = -1.0
 

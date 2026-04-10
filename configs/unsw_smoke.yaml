@@ -11,10 +11,10 @@ data:
   batch_size: 64
   num_workers: 0
   normalize: true
-  split_strategy: time
-  use_fixed_splits: true
-  splits_path: splits/unsw_nb15_smoke_split_v1.json
-  temporal_gap: 50
+  split_strategy: stratified_ordered
+  use_fixed_splits: false
+  splits_path: splits/unsw_nb15_smoke_split_v2.json
+  temporal_gap: 20
 
 model:
   type: hybrid_temporal
@@ -35,7 +35,7 @@ training:
   grad_clip_norm: 1.0
   loss_type: bce
   focal_gamma: 1.5
-  results_dir: results/unsw_smoke
+  results_dir: results/unsw_smoke_fixed
   log_dir: logs
 
 evaluation:

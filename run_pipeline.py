@@ -218,7 +218,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", default="configs/default.yaml", help="Path to pipeline config")
     parser.add_argument("--dataset", default=None, choices=["synthetic", "unsw_nb15"], help="Dataset source to run")
     parser.add_argument("--data-path", default=None, help="Optional dataset file path override")
-    parser.add_argument("--split-strategy", default=None, choices=["group", "time"], help="Override dataset split strategy")
+    parser.add_argument(
+        "--split-strategy",
+        default=None,
+        choices=["group", "time", "stratified_ordered"],
+        help="Override dataset split strategy",
+    )
     return parser
 
 
