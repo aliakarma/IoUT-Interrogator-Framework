@@ -9,7 +9,7 @@ and creates publication-ready robustness plots against:
   - noise level
 
 Output:
-  analysis/plots/ood_robustness.png
+    results/plots/ood_robustness.png
 """
 
 import argparse
@@ -129,8 +129,8 @@ def plot_ood_results(input_path: str, output_path: str, metric: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot OOD robustness from ood_results.csv")
-    parser.add_argument("--input", default="analysis/stats/ood_results.csv")
-    parser.add_argument("--output", default="analysis/plots/ood_robustness.png")
+    parser.add_argument("--input", default="results/stats/ood_results.csv")
+    parser.add_argument("--output", default="results/plots/ood_robustness.png")
     parser.add_argument("--metric", default="C", help="Metric to visualize (e.g., C, RP, P, A, TI, ECE, Brier)")
     args = parser.parse_args()
 

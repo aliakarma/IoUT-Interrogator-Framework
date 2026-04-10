@@ -5,8 +5,8 @@ Reproduces the PDR comparison figure from the paper.
 
 Usage:
     python analysis/plot_pdr.py \
-        --input simulation/outputs/results.csv \
-        --output analysis/plots/pdr_comparison.png
+        --input results/simulation/results.csv \
+        --output results/plots/pdr_comparison.png
 """
 
 import argparse
@@ -71,8 +71,8 @@ def plot_pdr(df: pd.DataFrame, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="simulation/outputs/results.csv")
-    parser.add_argument("--output", default="analysis/plots/pdr_comparison.png")
+    parser.add_argument("--input",  default="results/simulation/results.csv")
+    parser.add_argument("--output", default="results/plots/pdr_comparison.png")
     args = parser.parse_args()
     df = load_or_generate_data(args.input)
     plot_pdr(df, args.output)

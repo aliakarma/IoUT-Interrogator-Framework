@@ -145,7 +145,7 @@ def build_model(config: Dict[str, Any], input_dim: int):
 def train(model, loaders: Dict[str, Any], config: Dict[str, Any], metadata: Dict[str, Any]):
     training_cfg = config["training"]
     results_dir = Path(training_cfg.get("results_dir", "results/run_1"))
-    log_dir = Path(training_cfg.get("log_dir", "logs"))
+    log_dir = Path(training_cfg.get("log_dir", "results/logs"))
     results_dir.mkdir(parents=True, exist_ok=True)
     (results_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -257,7 +257,7 @@ def main() -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    log_dir = Path(config.get("training", {}).get("log_dir", "logs"))
+    log_dir = Path(config.get("training", {}).get("log_dir", "results/logs"))
     _setup_logging(log_dir)
 
     loaders, metadata = load_data(config)

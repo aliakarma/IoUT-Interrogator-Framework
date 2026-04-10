@@ -29,7 +29,7 @@ SEED_START = 42
 SEED_END = 61
 SEQ_LEN = 20
 MIN_RATIO = 0.2
-DEFAULT_RESULT_DIR = ROOT / "results" / "unsw_final"
+DEFAULT_RESULT_DIR = ROOT / "results" / "unsw_final_balanced"
 
 
 @dataclass
@@ -355,6 +355,12 @@ def write_report(
         row = lookup[metric]
         return f"{row['mean']:.4f} +/- {row['std']:.4f}"
 
+    def rel(path: Path) -> str:
+        try:
+            return path.relative_to(ROOT).as_posix()
+        except ValueError:
+            return path.as_posix()
+
     lines = [
         "# Real-World Evaluation Report (UNSW-NB15)",
         "",
@@ -411,7 +417,7 @@ def write_report(
         f"- no leakage confirmed by checks: {checks['no_leakage_warnings']}",
         "",
         "## Confusion Matrix (example seed)",
-        f"- see {(out_dir / 'confusion_matrix_seed42.json').as_posix()}",
+        f"- see {rel(out_dir / 'confusion_matrix_seed42.json')}",
         "",
         "## Observations",
         "- class imbalance is controlled by minimum-ratio constrained splitting",
@@ -424,12 +430,12 @@ def write_report(
         f"- metrics within realistic range: {checks['metrics_realistic']}",
         "",
         "## Artifacts",
-        f"- {(out_dir / 'per_seed_results.csv').as_posix()}",
-        f"- {(out_dir / 'summary.csv').as_posix()}",
-        f"- {(out_dir / 'validation_checks.json').as_posix()}",
-        f"- {(out_dir / 'split_stats.json').as_posix()}",
-        f"- {(out_dir / 'confusion_matrix_seed42.json').as_posix()}",
-        f"- {(out_dir / 'classification_report_seed42.txt').as_posix()}",
+        f"- {rel(out_dir / 'per_seed_results.csv')}",
+        f"- {rel(out_dir / 'summary.csv')}",
+        f"- {rel(out_dir / 'validation_checks.json')}",
+        f"- {rel(out_dir / 'split_stats.json')}",
+        f"- {rel(out_dir / 'confusion_matrix_seed42.json')}",
+        f"- {rel(out_dir / 'classification_report_seed42.txt')}",
         "",
         "## Conclusion",
         f"- real-world generalization validity: {checks['all_conditions_met']}",
@@ -443,6 +449,11 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="UNSW publication evaluation pipeline")
     parser.add_argument("--seeds", default=f"{SEED_START}-{SEED_END}", help="Seed range, e.g. 42-61")
     parser.add_argument("--output-dir", default=str(DEFAULT_RESULT_DIR), help="Output directory for UNSW artifacts")
+    parser.add_argument(
+        "--quick-test",
+        action="store_true",
+        help="Run a fast determinism verification using seed 42 only.",
+    )
     return parser.parse_args()
 
 
@@ -457,7 +468,12 @@ def _parse_seed_range(raw: str) -> tuple[int, int]:
 
 def main() -> None:
     args = _parse_args()
-    seed_start, seed_end = _parse_seed_range(args.seeds)
+    quick_test = bool(args.quick_test)
+    if quick_test:
+        seed_start, seed_end = 42, 42
+        print("[quick-test] Running single-seed verification with seed=42")
+    else:
+        seed_start, seed_end = _parse_seed_range(args.seeds)
     result_dir = Path(args.output_dir)
     if not result_dir.is_absolute():
         result_dir = ROOT / result_dir
@@ -480,7 +496,8 @@ def main() -> None:
     final_summary_df = pd.DataFrame()
 
     class0_weight = 1.0 / 0.7
-    for outer_attempt in range(1, 6):
+    max_outer_attempts = 1 if quick_test else 5
+    for outer_attempt in range(1, max_outer_attempts + 1):
         print(
             f"\n[Outer Attempt {outer_attempt}] Starting full 20-seed evaluation "
             f"(class0_weight={class0_weight:.3f})"
@@ -601,10 +618,15 @@ def main() -> None:
             print("[Validation] All conditions met.")
             break
 
-        print("[Validation] Conditions failed; auto-rerunning with increased class-0 weight and shifted split.")
+        if quick_test:
+            print("[Validation] Conditions failed under strict publication gates (expected in quick-test mode).")
+        else:
+            print("[Validation] Conditions failed; auto-rerunning with increased class-0 weight and shifted split.")
         class0_weight += 0.2
 
-    if not final_checks.get("all_conditions_met", False):
+    if quick_test:
+        print("[quick-test] Completed smoke verification run.")
+    elif not final_checks.get("all_conditions_met", False):
         raise SystemExit("Pipeline finished without meeting all conditions.")
 
     print("\n[Final] Publication pipeline complete.")

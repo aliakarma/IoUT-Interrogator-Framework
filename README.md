@@ -15,8 +15,7 @@ IoUT Interrogator Framework is a trust-aware IoUT anomaly inference pipeline wit
 - [Final Results](#final-results)
 - [Reproducibility (Strict, Copy-Paste)](#reproducibility-strict-copy-paste)
 - [Installation](#installation)
-- [Usage Examples](#usage-examples)
-- [Script Catalog](#script-catalog)
+- [Expected Outputs](#expected-outputs)
 - [Configuration](#configuration)
 - [Repository Structure](#repository-structure)
 - [Citation](#citation)
@@ -53,6 +52,7 @@ flowchart LR
 
 ## Experimental Setup
 - Seeds: 42-61 (20 runs)
+- All experiments use fixed seeds (42-61) for reproducibility.
 - Splits: train 70%, validation 15%, test 15%
 - Threshold tuning: validation-only sweep over 0.45 to 0.75 using balanced recall
 - Imbalance controls:
@@ -127,16 +127,17 @@ data/raw/unsw_nb15/Training and Testing Sets/
 ```bash
 python scripts/run_multi_seed_experiments.py \
   --dataset synthetic \
-  --models hybrid_temporal,lstm,random_forest,logistic_regression \
-  --seeds 42-61 \
-  --output-dir results/synthetic_final
+  --seeds 42-61
 ```
 
 ### 4) Reproduce Final UNSW 20-Seed Balanced Evaluation
 ```bash
-python run_unsw_publication_pipeline.py \
-  --seeds 42-61 \
-  --output-dir results/unsw_final_balanced
+python run_unsw_publication_pipeline.py --seeds 42-61
+```
+
+Quick verification (one-line):
+```bash
+python run_unsw_publication_pipeline.py --quick-test
 ```
 
 ### 5) Validate Final Outputs
@@ -158,47 +159,16 @@ python -c "import json; print(json.load(open('results/unsw_final_balanced/valida
 
 </details>
 
-## Usage Examples
-
-### End-to-End Standard Pipeline
-```bash
-python run_pipeline.py --config configs/default.yaml
+## Expected Outputs
+```text
+results/
+  synthetic_final/
+  unsw_final_balanced/
 ```
 
-### Full Experiment Reproduction Script
-```bash
-python scripts/reproduce_all.py
-```
-
-### Additional Studies
-```bash
-python scripts/run_ablation_study.py
-python scripts/run_ood_evaluation.py
-python scripts/run_robustness_experiments.py
-```
-
-## Script Catalog
-
-<details>
-<summary>Documented script entry points</summary>
-
-- `run_pipeline.py`: main configurable pipeline runner.
-- `run_unsw_publication_pipeline.py`: UNSW final publication pipeline wrapper.
-- `scripts/run_unsw_publication_pipeline.py`: UNSW core evaluation implementation.
-- `scripts/run_multi_seed_experiments.py`: synthetic/baseline multi-seed benchmark runner.
-- `scripts/run_full_pipeline.py`: convenience execution for full configured run.
-- `scripts/reproduce_all.py`: one-command reproduction orchestrator.
-- `scripts/run_ablation_study.py`: ablation experiments.
-- `scripts/run_ood_evaluation.py`: out-of-distribution evaluation.
-- `scripts/run_robustness_experiments.py`: robustness experiment suite.
-- `scripts/generate_summary_table.py`: aggregate summary-table export.
-- `scripts/export_all_results.py`: consolidated results export utility.
-- `scripts/generate_figures.py`: publication figure generation.
-- `scripts/generate_pr_curve.py`: precision-recall curve artifact generation.
-- `scripts/profile_inference.py`: inference-time profiling.
-- `verify_splits.py`: split integrity validation utility.
-
-</details>
+Primary entry points:
+- `run_pipeline.py`
+- `run_unsw_publication_pipeline.py`
 
 ## Configuration
 - Primary config file: `configs/default.yaml`

@@ -33,6 +33,23 @@ logs/
 *.tmp
 *.cache
 
+# generated outputs
+outputs/
+analysis/
+plots/
+stats/
+checkpoints/
+simulation/outputs/
+analysis/final_results/
+analysis/plots/
+analysis/stats/
+model/checkpoints/
+
+# keep analysis source code tracked
+!analysis/
+!analysis/__init__.py
+!analysis/*.py
+
 # Notebook cache
 .ipynb_checkpoints/
 *.ipynb_checkpoints
@@ -47,9 +64,18 @@ data/raw/unsw_nb15/UNSW-NB15_2.csv
 data/raw/unsw_nb15/UNSW-NB15_3.csv
 data/raw/unsw_nb15/UNSW-NB15_4.csv
 
+# Processed/generated data
+data/processed/
+
 # Checkpoints/binaries
 *.pt
 *.pth
+
+# experiments
+results/run_*
+results/ablation*
+results/robustness*
+results/*smoke*
 
 # Results policy: keep only final result folders tracked
 results/*

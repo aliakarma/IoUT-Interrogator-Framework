@@ -14,7 +14,7 @@ aggregating results from:
 - Model calibration metrics
 
 Usage:
-    python export_all_results.py --output-dir analysis/final_results/
+    python export_all_results.py --output-dir results/final_results/
 """
 
 import sys
@@ -601,9 +601,9 @@ def compute_combined_results_table(
 
 def export_results(
     output_dir: str,
-    sim_outputs_dir: str = 'simulation/outputs',
-    analysis_stats_dir: str = 'analysis/stats',
-    checkpoint_dir: str = 'model/checkpoints',
+    sim_outputs_dir: str = 'results/simulation',
+    analysis_stats_dir: str = 'results/stats',
+    checkpoint_dir: str = 'results/checkpoints',
 ):
     """Main export orchestration."""
     
@@ -713,25 +713,25 @@ def main():
     parser.add_argument(
         '--output-dir',
         type=str,
-        default='analysis/final_results',
-        help='Output directory for final results (default: analysis/final_results)'
+        default='results/final_results',
+        help='Output directory for final results (default: results/final_results)'
     )
     parser.add_argument(
         '--sim-outputs-dir',
         type=str,
-        default='simulation/outputs',
+        default='results/simulation',
         help='Path to simulation outputs directory'
     )
     parser.add_argument(
         '--analysis-stats-dir',
         type=str,
-        default='analysis/stats',
-        help='Path to analysis/stats directory'
+        default='results/stats',
+        help='Path to statistics directory'
     )
     parser.add_argument(
         '--checkpoint-dir',
         type=str,
-        default='model/checkpoints',
+        default='results/checkpoints',
         help='Path to model checkpoints directory'
     )
     

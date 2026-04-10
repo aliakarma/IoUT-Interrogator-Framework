@@ -8,7 +8,7 @@ Usage:
         --config simulation/configs/simulation_params.json \
         --runs 30 \
         --seed 42 \
-        --output simulation/outputs/results.csv
+        --output results/simulation/results.csv
 """
 
 import argparse
@@ -41,7 +41,7 @@ def _parse_bool(value):
 def run_single_simulation(config_path: str, seed: int,
                            num_intervals: int = 20,
                            use_transformer: bool = False,
-                           checkpoint_path: str = "model/checkpoints/best_model.pt",
+                           checkpoint_path: str = "results/checkpoints/best_model.pt",
                            model_config_path: str = "model/configs/transformer_config.json",
                            temperature: float = 1.5,
                            quantized: bool = True,
@@ -201,12 +201,12 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="simulation/outputs/results.csv",
+        default="results/simulation/results.csv",
         help="Output CSV path"
     )
     parser.add_argument(
         "--raw-output",
-        default="simulation/outputs/raw_results.csv",
+        default="results/simulation/raw_results.csv",
         help="Output CSV path for long-format raw run-level metrics.",
     )
     parser.add_argument(
@@ -219,7 +219,7 @@ def main():
     )
     parser.add_argument(
         "--checkpoint",
-        default="model/checkpoints/best_model.pt",
+        default="results/checkpoints/best_model.pt",
         help="Transformer checkpoint path (used when --use-transformer is set).",
     )
     parser.add_argument(

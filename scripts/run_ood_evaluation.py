@@ -11,10 +11,10 @@ Metrics:
 
 Examples:
   python scripts/run_ood_evaluation.py \
-      --checkpoint model/checkpoints/best_model.pt
+    --checkpoint results/checkpoints/best_model.pt
 
   python scripts/run_ood_evaluation.py \
-      --checkpoint model/checkpoints/best_model.pt \
+      --checkpoint results/checkpoints/best_model.pt \
       --generate-datasets \
       --adversarial-fractions 0.05,0.15,0.30 \
       --noise-levels 0.04,0.08,0.12
@@ -206,7 +206,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True, help="Path to trained checkpoint (.pt)")
     parser.add_argument("--config", default="model/configs/transformer_config.json")
     parser.add_argument("--dataset-pattern", default="data/raw/data_adv*_noise*.json")
-    parser.add_argument("--output", default="analysis/stats/ood_results.csv")
+    parser.add_argument("--output", default="results/stats/ood_results.csv")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--tau-min", type=float, default=None)
