@@ -63,6 +63,7 @@ data/raw/unsw_nb15/UNSW-NB15_1.csv
 data/raw/unsw_nb15/UNSW-NB15_2.csv
 data/raw/unsw_nb15/UNSW-NB15_3.csv
 data/raw/unsw_nb15/UNSW-NB15_4.csv
+data/raw/unsw_nb15/UNSW-NB15_GT.csv
 
 # Processed/generated data
 data/processed/
@@ -83,3 +84,6 @@ results/*
 !results/synthetic_final/**
 !results/unsw_final_balanced/
 !results/unsw_final_balanced/**
+
+data/raw/unsw_nb15/
+*.csv
