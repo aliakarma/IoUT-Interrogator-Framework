@@ -44,11 +44,20 @@ flowchart LR
 - Purpose: controlled benchmarking across architectures and baselines.
 - Pipeline target: multi-model 20-seed robustness summary.
 
-### 2) Real Dataset: UNSW-NB15
-- Purpose: external validity under realistic imbalance.
-- Required local path:
-  - `data/raw/unsw_nb15/Training and Testing Sets/`
-- Required files (CSV): UNSW-NB15 training/testing set files.
+### 2) Real-World Evaluation Dataset (UNSW-NB15)
+
+The dataset is not included in this repository due to licensing restrictions.
+
+Please download it from the official source:
+https://research.unsw.edu.au/projects/unsw-nb15-dataset
+
+After downloading, place the files in:
+
+`data/raw/unsw_nb15/`
+
+Expected files:
+- `UNSW_NB15_training-set.csv`
+- `UNSW_NB15_testing-set.csv`
 
 ## Experimental Setup
 - Seeds: 42-61 (20 runs)
