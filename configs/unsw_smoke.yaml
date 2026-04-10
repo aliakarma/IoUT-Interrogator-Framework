@@ -1,0 +1,48 @@
+data:
+  dataset: unsw_nb15
+  path: data/raw/unsw_nb15/Training and Testing Sets
+  unsw_path: data/raw/unsw_nb15
+  format: csv
+  seq_len: 20
+  max_rows: 12000
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  batch_size: 64
+  num_workers: 0
+  normalize: true
+  split_strategy: time
+  use_fixed_splits: true
+  splits_path: splits/unsw_nb15_smoke_split_v1.json
+  temporal_gap: 50
+
+model:
+  type: hybrid_temporal
+  hidden_dim: 96
+  num_layers: 2
+  channels: 96
+  d_model: 96
+  nhead: 4
+  dim_feedforward: 192
+  dropout: 0.3
+
+training:
+  seed: 42
+  epochs: 1
+  early_stopping_patience: 1
+  learning_rate: 0.0005
+  weight_decay: 0.0005
+  grad_clip_norm: 1.0
+  loss_type: bce
+  focal_gamma: 1.5
+  results_dir: results/unsw_smoke
+  log_dir: logs
+
+evaluation:
+  threshold: 0.50
+  tune_threshold: true
+  threshold_metric: f1
+  save_confusion_matrix: true
+
+baseline:
+  name: logistic_regression

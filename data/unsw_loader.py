@@ -143,11 +143,11 @@ def load_unsw_nb15_records(
             f"Not enough rows ({len(X)}) to build sequences with seq_len={seq_len}."
         )
 
-    # Normalize each sequence independently to avoid cross-split leakage.
-    normalized_sequences, _ = normalize_features(sequences)
+    # DO NOT normalize here — defer to build_dataloaders to fit scaler on training data only.
+    # This prevents leakage where scaler statistics come from the entire dataset.
 
     records: List[Dict[str, Any]] = []
-    for index, (sequence, label) in enumerate(zip(normalized_sequences, labels)):
+    for index, (sequence, label) in enumerate(zip(sequences, labels)):
         records.append(
             {
                 "sensor_id": f"unsw_flow_{index:07d}",
@@ -156,4 +156,10 @@ def load_unsw_nb15_records(
                 "label": int(label),
             }
         )
+    
+    # Log summary for audit trail
+    print(f"[UNSW Loader] Loaded {len(sequences)} sequences from {df.shape[0]} original rows")
+    print(f"[UNSW Loader] Label distribution: {np.bincount(y)}")
+    print(f"[UNSW Loader] Positive rate: {y.mean():.4f}")
+    
     return records

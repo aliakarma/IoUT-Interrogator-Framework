@@ -53,8 +53,10 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
             seq_len=seq_len,
             max_rows=data_cfg.get("max_rows"),
         )
+        temporal_gap = int(data_cfg.get("temporal_gap", 50))
     else:
         records = load_records(data_cfg["path"], file_format=data_cfg.get("format", "auto"))
+        temporal_gap = int(data_cfg.get("temporal_gap", 0))
 
     loaders, metadata, _ = build_dataloaders(
         records=records,
@@ -69,6 +71,7 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
         strategy=str(data_cfg.get("split_strategy", "group")),
         use_fixed_splits=bool(data_cfg.get("use_fixed_splits", True)),
         splits_path=splits_path,
+        temporal_gap=temporal_gap,
     )
 
     train_ids = set(metadata.get("train_sensor_ids", []))
@@ -180,13 +183,34 @@ def evaluate(model, loaders: Dict[str, Any], config: Dict[str, Any], metadata: D
             val_loader=loaders["val"],
             metric_name=str(evaluation_cfg.get("threshold_metric", "f1")),
         )
-    return evaluate_model(
+    
+    metrics = evaluate_model(
         model=model,
         test_loader=loaders["test"],
         output_dir=results_dir,
         threshold=threshold,
         save_confusion_matrix=bool(evaluation_cfg.get("save_confusion_matrix", True)),
     )
+    
+    # ===== SANITY CHECK: Metric validation =====
+    f1 = metrics.get("f1", 0.0)
+    roc_auc = metrics.get("roc_auc", 0.0)
+    pr_auc = metrics.get("pr_auc", 0.0)
+    
+    print(f"\n[Metric Summary]")
+    print(f"  F1: {f1:.4f}")
+    print(f"  ROC-AUC: {roc_auc:.4f}")
+    print(f"  PR-AUC: {pr_auc:.4f}")
+    
+    if f1 > 0.98 or roc_auc > 0.995:
+        print(f"\n⚠️  [LEAKAGE WARNING] Metrics are suspiciously high!")
+        print(f"   F1 > 0.98: {f1 > 0.98} (value={f1:.4f})")
+        print(f"   ROC-AUC > 0.995: {roc_auc > 0.995} (value={roc_auc:.4f})")
+        print(f"   → Verify: scaler fit on training data only")
+        print(f"   → Verify: temporal gap prevents sequence overlap")
+        print(f"   → Verify: no labels leaking into features")
+    
+    return metrics
 
 
 def _build_parser() -> argparse.ArgumentParser:
