@@ -1,5 +1,7 @@
 data:
+  dataset: synthetic
   path: data/raw/behavioral_sequences.json
+  unsw_path: data/raw/unsw_nb15/UNSW_NB15_training-set.csv
   format: auto
   seq_len: 64
   train_split: 0.70
@@ -15,14 +17,12 @@ data:
 model:
   type: hybrid_temporal
   hidden_dim: 96
-  hidden_dim: 64
   num_layers: 2
   channels: 96
-  channels: 64
   d_model: 96
-  dim_feedforward: 192
   nhead: 4
-  dim_feedforward: 128
+  dim_feedforward: 192
+  dropout: 0.3
 
 training:
   seed: 42

@@ -165,6 +165,8 @@ def _criteria_report(model_summaries: Dict[str, Dict[str, Any]], tests_payload: 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run multi-seed IoUT benchmark experiments with statistical testing")
     parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument("--dataset", default=None, choices=["synthetic", "unsw_nb15"], help="Dataset source to run")
+    parser.add_argument("--data-path", default=None, help="Optional dataset file path override")
     parser.add_argument("--model", default=None, help="Single model shortcut (overrides --models)")
     parser.add_argument("--models", default="gru,lstm,temporal_cnn,fft,majority,moving_average")
     parser.add_argument("--seeds", default="42,43,44,45,46")
@@ -175,6 +177,10 @@ def main() -> None:
     args = parser.parse_args()
 
     base_config = load_config(args.config)
+    if args.dataset:
+        base_config.setdefault("data", {})["dataset"] = args.dataset
+    if args.data_path:
+        base_config.setdefault("data", {})["path"] = args.data_path
     model_names = [args.model] if args.model else [token.strip() for token in args.models.split(",") if token.strip()]
     seeds = _parse_seeds(args.seeds)
 

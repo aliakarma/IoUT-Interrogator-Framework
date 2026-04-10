@@ -57,6 +57,8 @@ def main() -> None:
     parser.add_argument("--learning-curves-dir", default="results/learning_curves")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--robustness-path", default="results/robustness_analysis.json")
+    parser.add_argument("--name-suffix", default="", help="Optional suffix appended to generated figure/data filenames")
+    parser.add_argument("--skip-robustness", action="store_true", help="Skip robustness curve generation")
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -84,7 +86,8 @@ def main() -> None:
         "train_loss": train_loss[: len(epochs)],
         "val_loss": val_loss[: len(epochs)],
     }
-    _write_json(figures_data_dir / "learning_curve.json", learning_curve_payload)
+    suffix = str(args.name_suffix)
+    _write_json(figures_data_dir / f"learning_curve{suffix}.json", learning_curve_payload)
 
     plt.figure(figsize=(6, 4))
     plt.plot(learning_curve_payload["epochs"], learning_curve_payload["train_loss"], label="Train Loss")
@@ -94,7 +97,7 @@ def main() -> None:
     plt.title("Learning Curve")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(figures_dir / "learning_curve.png", dpi=300)
+    plt.savefig(figures_dir / f"learning_curve{suffix}.png", dpi=300)
     plt.close()
 
     f1_values: List[float] = []
@@ -109,7 +112,7 @@ def main() -> None:
         "seeds": seeds,
         "f1": f1_values,
     }
-    _write_json(figures_data_dir / "f1_distribution.json", f1_payload)
+    _write_json(figures_data_dir / f"f1_distribution{suffix}.json", f1_payload)
 
     plt.figure(figsize=(6, 4))
     plt.hist(f1_values, bins=10)
@@ -117,7 +120,7 @@ def main() -> None:
     plt.ylabel("Frequency")
     plt.title("F1 Distribution Across Seeds")
     plt.tight_layout()
-    plt.savefig(figures_dir / "f1_histogram.png", dpi=300)
+    plt.savefig(figures_dir / f"f1_histogram{suffix}.png", dpi=300)
     plt.close()
 
     best_run_path = results_dir / best_model / f"seed_{best_seed}" / "pr_curve.json"
@@ -134,7 +137,7 @@ def main() -> None:
         "recall": [float(value) for value in pr_data.get("recall", [])],
         "thresholds": [float(value) for value in pr_data.get("thresholds", [])],
     }
-    _write_json(figures_data_dir / "pr_curve.json", pr_payload)
+    _write_json(figures_data_dir / f"pr_curve{suffix}.json", pr_payload)
 
     plt.figure(figsize=(6, 4))
     plt.plot(pr_payload["recall"], pr_payload["precision"])
@@ -142,27 +145,34 @@ def main() -> None:
     plt.ylabel("Precision")
     plt.title("Precision-Recall Curve")
     plt.tight_layout()
-    plt.savefig(figures_dir / "pr_curve.png", dpi=300)
+    plt.savefig(figures_dir / f"pr_curve{suffix}.png", dpi=300)
     plt.close()
 
-    robustness_payload = _read_json(Path(args.robustness_path))
-    noise_levels = [float(value) for value in robustness_payload.get("noise_levels", [])]
-    accuracy = [float(value) for value in robustness_payload.get("accuracy", [])]
-    robustness_export = {
-        "noise_levels": noise_levels,
-        "accuracy": accuracy,
-        "degradation_rate": float(robustness_payload.get("degradation_rate", 0.0)),
-    }
-    _write_json(figures_data_dir / "robustness_curve.json", robustness_export)
+    generated_figures = [
+        f"learning_curve{suffix}.png",
+        f"f1_histogram{suffix}.png",
+        f"pr_curve{suffix}.png",
+    ]
+    if not args.skip_robustness:
+        robustness_payload = _read_json(Path(args.robustness_path))
+        noise_levels = [float(value) for value in robustness_payload.get("noise_levels", [])]
+        accuracy = [float(value) for value in robustness_payload.get("accuracy", [])]
+        robustness_export = {
+            "noise_levels": noise_levels,
+            "accuracy": accuracy,
+            "degradation_rate": float(robustness_payload.get("degradation_rate", 0.0)),
+        }
+        _write_json(figures_data_dir / f"robustness_curve{suffix}.json", robustness_export)
 
-    plt.figure(figsize=(6, 4))
-    plt.plot(noise_levels, accuracy, marker="o")
-    plt.xlabel("Noise Level")
-    plt.ylabel("Accuracy")
-    plt.title("Robustness Curve")
-    plt.tight_layout()
-    plt.savefig(figures_dir / "robustness_curve.png", dpi=300)
-    plt.close()
+        plt.figure(figsize=(6, 4))
+        plt.plot(noise_levels, accuracy, marker="o")
+        plt.xlabel("Noise Level")
+        plt.ylabel("Accuracy")
+        plt.title("Robustness Curve")
+        plt.tight_layout()
+        plt.savefig(figures_dir / f"robustness_curve{suffix}.png", dpi=300)
+        plt.close()
+        generated_figures.append(f"robustness_curve{suffix}.png")
 
     print(
         json.dumps(
@@ -171,12 +181,7 @@ def main() -> None:
                 "best_seed_for_pr_curve": best_seed,
                 "figures_dir": str(figures_dir),
                 "figures_data_dir": str(figures_data_dir),
-                "generated_figures": [
-                    "learning_curve.png",
-                    "f1_histogram.png",
-                    "pr_curve.png",
-                    "robustness_curve.png",
-                ],
+                "generated_figures": generated_figures,
             },
             indent=2,
         )

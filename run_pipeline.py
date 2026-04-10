@@ -19,6 +19,7 @@ from models.hybrid_temporal import HybridTemporalClassifier
 from models.temporal_cnn import TemporalCNNClassifier
 from models.transformer_light import LightweightTransformerClassifier
 from models.sequence_model import GRUClassifier, LSTMClassifier
+from data.unsw_loader import load_unsw_nb15_records
 from training.trainer import fit_model, set_global_seed
 
 
@@ -34,10 +35,30 @@ def load_config(config_path: str | Path) -> Dict[str, Any]:
 
 def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str, Any]]:
     data_cfg = config["data"]
-    records = load_records(data_cfg["path"], file_format=data_cfg.get("format", "auto"))
+    dataset_name = str(data_cfg.get("dataset", "synthetic")).lower()
+    seq_len = int(data_cfg.get("seq_len", 64))
+    splits_path = str(data_cfg.get("splits_path", "splits/split_v1.json"))
+
+    if dataset_name == "unsw_nb15":
+        default_synthetic_path = "data/raw/behavioral_sequences.json"
+        unsw_default_path = str(data_cfg.get("unsw_path", "data/raw/unsw_nb15/UNSW_NB15_training-set.csv"))
+        source_path = str(data_cfg.get("path", default_synthetic_path))
+        if source_path == default_synthetic_path:
+            source_path = unsw_default_path
+        if splits_path == "splits/split_v1.json":
+            splits_path = "splits/unsw_nb15_split_v1.json"
+        seq_len = 20
+        records = load_unsw_nb15_records(
+            source=source_path,
+            seq_len=seq_len,
+            max_rows=data_cfg.get("max_rows"),
+        )
+    else:
+        records = load_records(data_cfg["path"], file_format=data_cfg.get("format", "auto"))
+
     loaders, metadata, _ = build_dataloaders(
         records=records,
-        seq_len=int(data_cfg.get("seq_len", 64)),
+        seq_len=seq_len,
         train_split=float(data_cfg.get("train_split", 0.7)),
         val_split=float(data_cfg.get("val_split", 0.15)),
         test_split=float(data_cfg.get("test_split", 0.15)),
@@ -47,7 +68,7 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
         seed=int(config["training"].get("seed", 42)),
         strategy=str(data_cfg.get("split_strategy", "group")),
         use_fixed_splits=bool(data_cfg.get("use_fixed_splits", True)),
-        splits_path=str(data_cfg.get("splits_path", "splits/split_v1.json")),
+        splits_path=splits_path,
     )
 
     train_ids = set(metadata.get("train_sensor_ids", []))
@@ -171,6 +192,8 @@ def evaluate(model, loaders: Dict[str, Any], config: Dict[str, Any], metadata: D
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="IoUT signal ML pipeline")
     parser.add_argument("--config", default="configs/default.yaml", help="Path to pipeline config")
+    parser.add_argument("--dataset", default=None, choices=["synthetic", "unsw_nb15"], help="Dataset source to run")
+    parser.add_argument("--data-path", default=None, help="Optional dataset file path override")
     parser.add_argument("--split-strategy", default=None, choices=["group", "time"], help="Override dataset split strategy")
     return parser
 
@@ -190,6 +213,10 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
     config = load_config(args.config)
+    if args.dataset:
+        config.setdefault("data", {})["dataset"] = args.dataset
+    if args.data_path:
+        config.setdefault("data", {})["path"] = args.data_path
     if args.split_strategy:
         config.setdefault("data", {})["split_strategy"] = args.split_strategy
 
