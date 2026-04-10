@@ -408,7 +408,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train and evaluate leakage-safe baseline trust models")
     parser.add_argument("--config", default="model/configs/transformer_config.json")
     parser.add_argument("--data", default="data/raw/behavioral_sequences.json")
-    parser.add_argument("--output", default="analysis/stats/baseline_results.csv")
+    parser.add_argument("--output", default="results/stats/baseline_results.csv")
     args = parser.parse_args()
 
     if not os.path.exists(args.config):

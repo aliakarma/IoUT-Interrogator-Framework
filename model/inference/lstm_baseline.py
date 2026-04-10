@@ -11,7 +11,7 @@ Usage:
   python model/inference/lstm_baseline.py \
       --config model/configs/transformer_config.json \
       --data data/raw/behavioral_sequences.json \
-      --output analysis/stats/lstm_baseline_results.csv
+    --output results/stats/lstm_baseline_results.csv
 """
 
 import argparse
@@ -397,8 +397,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train and evaluate LSTM baseline")
     parser.add_argument("--config", default="model/configs/transformer_config.json")
     parser.add_argument("--data", default="data/raw/behavioral_sequences.json")
-    parser.add_argument("--output", default="analysis/stats/lstm_baseline_results.csv")
-    parser.add_argument("--checkpoint-dir", default="model/checkpoints/")
+    parser.add_argument("--output", default="results/stats/lstm_baseline_results.csv")
+    parser.add_argument("--checkpoint-dir", default="results/checkpoints/")
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--num-layers", type=int, default=2)
     parser.set_defaults(bidirectional=True)

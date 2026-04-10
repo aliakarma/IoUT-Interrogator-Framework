@@ -13,7 +13,7 @@ Usage:
     python model/inference/train.py \
         --config model/configs/transformer_config.json \
         --data   data/raw/behavioral_sequences.json \
-        --checkpoint-dir model/checkpoints/ \
+        --checkpoint-dir results/checkpoints/ \
         --seed 42
 
     # Skip sanity check (faster, for CI):
@@ -129,7 +129,7 @@ def main():
     )
     parser.add_argument(
         "--checkpoint-dir",
-        default="model/checkpoints/",
+        default="results/checkpoints/",
         help="Directory to save model checkpoints",
     )
     parser.add_argument(

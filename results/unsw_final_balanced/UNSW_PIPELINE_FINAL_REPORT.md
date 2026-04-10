@@ -53,7 +53,7 @@
 - no leakage confirmed by checks: True
 
 ## Confusion Matrix (example seed)
-- see C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/confusion_matrix_seed42.json
+- see results/unsw_final_balanced/confusion_matrix_seed42.json
 
 ## Observations
 - class imbalance is controlled by minimum-ratio constrained splitting
@@ -66,12 +66,12 @@
 - metrics within realistic range: True
 
 ## Artifacts
-- C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/per_seed_results.csv
-- C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/summary.csv
-- C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/validation_checks.json
-- C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/split_stats.json
-- C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/confusion_matrix_seed42.json
-- C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/classification_report_seed42.txt
+- results/unsw_final_balanced/per_seed_results.csv
+- results/unsw_final_balanced/summary.csv
+- results/unsw_final_balanced/validation_checks.json
+- results/unsw_final_balanced/split_stats.json
+- results/unsw_final_balanced/confusion_matrix_seed42.json
+- results/unsw_final_balanced/classification_report_seed42.txt
 
 ## Conclusion
 - real-world generalization validity: True

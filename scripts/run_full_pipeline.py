@@ -1,6 +1,8 @@
 """
 Full Reproducibility Pipeline
 ==============================
+LEGACY OPTIONAL PIPELINE: kept for compatibility; primary entry points are
+run_pipeline.py and run_unsw_publication_pipeline.py.
 Runs the complete experiment pipeline in one command:
   1. Generate synthetic behavioral data
     2. Train the transformer trust model
@@ -70,6 +72,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=True,
         help="Enable transformer trust scores inside simulation loop (default: True).",
     )
+    parser.add_argument(
+        "--output-root",
+        default="results/full_pipeline",
+        help="Root directory for all generated artifacts (default: results/full_pipeline).",
+    )
     return parser
 
 
@@ -101,6 +108,35 @@ def _build_quick_train_config(base_config_path: str) -> str:
 def main():
     ensure_supported_python()
     args = _parse_args()
+    print("[legacy optional] scripts/run_full_pipeline.py writes artifacts under results/ by default.")
+
+    output_root = os.path.abspath(args.output_root)
+    data_out_dir = os.path.join(output_root, "data")
+    checkpoints_dir = os.path.join(output_root, "checkpoints")
+    sim_out_dir = os.path.join(output_root, "simulation")
+    processed_dir = os.path.join(output_root, "processed")
+    plots_dir = os.path.join(output_root, "plots")
+    stats_dir = os.path.join(output_root, "stats")
+    export_dir = os.path.join(output_root, "exports")
+
+    os.makedirs(output_root, exist_ok=True)
+    os.makedirs(data_out_dir, exist_ok=True)
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    os.makedirs(sim_out_dir, exist_ok=True)
+    os.makedirs(processed_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+    os.makedirs(stats_dir, exist_ok=True)
+    os.makedirs(export_dir, exist_ok=True)
+
+    generated_data_path = os.path.join(data_out_dir, "raw", "behavioral_sequences.json")
+    sim_results_path = os.path.join(sim_out_dir, "results.csv")
+    sim_raw_results_path = os.path.join(sim_out_dir, "raw_results.csv")
+    checkpoint_path = os.path.join(checkpoints_dir, "best_model.pt")
+    preprocess_stats_path = os.path.join(checkpoints_dir, "preprocessing_stats.json")
+    eval_metrics_path = os.path.join(checkpoints_dir, "evaluation_metrics.json")
+    trust_scores_path = os.path.join(processed_dir, "trust_scores.csv")
+    stats_summary_path = os.path.join(stats_dir, "summary_table.csv")
+    provenance_path = os.path.join(export_dir, "provenance_manifest.json")
 
     effective_runs = args.runs
     effective_intervals = args.intervals
@@ -128,7 +164,7 @@ def main():
         "--seq-len", "64",
         "--adv-fraction", "0.15",
         "--seed", str(args.seed),
-        "--out-dir", "data/",
+        "--out-dir", data_out_dir,
     ]
     gen_main()
 
@@ -146,8 +182,8 @@ def main():
         _sys.argv = [
             "train.py",
             "--config",         train_config_path,
-            "--data",           "data/raw/behavioral_sequences.json",
-            "--checkpoint-dir", "model/checkpoints/",
+            "--data",           generated_data_path,
+            "--checkpoint-dir", checkpoints_dir,
             "--seed",           str(args.seed),
         ]
         try:
@@ -167,21 +203,22 @@ def main():
         "--runs",   str(effective_runs),
         "--seed",   str(args.seed),
         "--intervals", str(effective_intervals),
-        "--output", "simulation/outputs/results.csv",
+        "--output", sim_results_path,
+        "--raw-output", sim_raw_results_path,
     ]
     if args.use_transformer:
         _sys.argv += [
             "--use-transformer",
             "True",
             "--no-quantized-transformer",
-            "--checkpoint", "model/checkpoints/best_model.pt",
+            "--checkpoint", checkpoint_path,
             "--model-config", "model/configs/transformer_config.json",
         ]
     sim_main()
 
     required_outputs = [
-        "simulation/outputs/results.csv",
-        "simulation/outputs/raw_results.csv",
+        sim_results_path,
+        sim_raw_results_path,
     ]
     for output_path in required_outputs:
         if not os.path.exists(output_path):
@@ -191,10 +228,10 @@ def main():
     step("4/5 — Run trust inference on sample sequences")
     from model.inference.infer import run_inference
     run_inference(
-        checkpoint_path="model/checkpoints/best_model.pt",
+        checkpoint_path=checkpoint_path,
         config_path="model/configs/transformer_config.json",
         sequences_path="data/sample/sample_sequences.json",
-        output_path="data/processed/trust_scores.csv",
+        output_path=trust_scores_path,
         tau_min=0.65,
     )
 
@@ -202,26 +239,26 @@ def main():
     step("5/5 — Generate all figures and statistics")
 
     from analysis.plot_trust_accuracy import load_or_generate_data, plot_trust_accuracy
-    df = load_or_generate_data("simulation/outputs/results.csv")
-    plot_trust_accuracy(df, "analysis/plots/trust_accuracy.png")
+    df = load_or_generate_data(sim_results_path)
+    plot_trust_accuracy(df, os.path.join(plots_dir, "trust_accuracy.png"))
 
     from analysis.plot_energy import load_or_generate_data as le, plot_energy
-    plot_energy(le("simulation/outputs/results.csv"), "analysis/plots/energy_comparison.png")
+    plot_energy(le(sim_results_path), os.path.join(plots_dir, "energy_comparison.png"))
 
     from analysis.plot_pdr import load_or_generate_data as lp, plot_pdr
-    plot_pdr(lp("simulation/outputs/results.csv"), "analysis/plots/pdr_comparison.png")
+    plot_pdr(lp(sim_results_path), os.path.join(plots_dir, "pdr_comparison.png"))
 
     from analysis.plot_ablation import plot_ablation
     plot_ablation(
-        "simulation/outputs/results.csv",
-        "analysis/plots/ablation_study.png",
+        sim_results_path,
+        os.path.join(plots_dir, "ablation_study.png"),
     )
 
     from analysis.statistical_summary import main as stats_main
     _sys.argv = [
         "statistical_summary.py",
-        "--input",  "simulation/outputs/raw_results.csv",
-        "--output", "analysis/stats/summary_table.csv",
+        "--input",  sim_raw_results_path,
+        "--output", stats_summary_path,
         "--aggregate-level", "seed",
         "--bootstrap-samples", "2000",
         "--ci-level", "95",
@@ -231,10 +268,10 @@ def main():
 
     from scripts.export_all_results import export_results
     export_results(
-        output_dir="analysis/final_results",
-        sim_outputs_dir="simulation/outputs",
-        analysis_stats_dir="analysis/stats",
-        checkpoint_dir="model/checkpoints",
+        output_dir=export_dir,
+        sim_outputs_dir=sim_out_dir,
+        analysis_stats_dir=stats_dir,
+        checkpoint_dir=checkpoints_dir,
     )
 
     def _sha256(path: str) -> str:
@@ -253,13 +290,13 @@ def main():
         "artifacts": {},
     }
     artifact_paths = [
-        "model/checkpoints/best_model.pt",
-        "model/checkpoints/preprocessing_stats.json",
-        "model/checkpoints/evaluation_metrics.json",
-        "simulation/outputs/results.csv",
-        "simulation/outputs/raw_results.csv",
-        "analysis/stats/summary_table.csv",
-        "analysis/final_results/main_metrics.csv",
+        checkpoint_path,
+        preprocess_stats_path,
+        eval_metrics_path,
+        sim_results_path,
+        sim_raw_results_path,
+        stats_summary_path,
+        os.path.join(export_dir, "main_metrics.csv"),
     ]
     for artifact_path in artifact_paths:
         if os.path.exists(artifact_path):
@@ -267,17 +304,17 @@ def main():
                 "sha256": _sha256(artifact_path),
                 "size_bytes": os.path.getsize(artifact_path),
             }
-    with open("analysis/final_results/provenance_manifest.json", "w", encoding="utf-8") as f:
+    with open(provenance_path, "w", encoding="utf-8") as f:
         json.dump(provenance, f, indent=2)
 
     # ── Done ──────────────────────────────────────────────────────────────
     elapsed = time.time() - t0
     print(f"\n{'='*60}")
     print(f"  PIPELINE COMPLETE in {elapsed:.1f}s")
-    print(f"  Figures:    analysis/plots/")
-    print(f"  Statistics: analysis/stats/summary_table.csv")
-    print(f"  Results:    simulation/outputs/results.csv")
-    print(f"  Checkpoint: model/checkpoints/best_model.pt")
+    print(f"  Figures:    {plots_dir}")
+    print(f"  Statistics: {stats_summary_path}")
+    print(f"  Results:    {sim_results_path}")
+    print(f"  Checkpoint: {checkpoint_path}")
     print(f"  Seed count: {effective_seed_count}")
     print(f"{'='*60}\n")
 

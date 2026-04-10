@@ -5,8 +5,8 @@ Reproduces the energy consumption comparison figure from the paper.
 
 Usage:
     python analysis/plot_energy.py \
-        --input simulation/outputs/results.csv \
-        --output analysis/plots/energy_comparison.png
+        --input results/simulation/results.csv \
+        --output results/plots/energy_comparison.png
 """
 
 import argparse
@@ -84,8 +84,8 @@ def plot_energy(df: pd.DataFrame, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="simulation/outputs/results.csv")
-    parser.add_argument("--output", default="analysis/plots/energy_comparison.png")
+    parser.add_argument("--input",  default="results/simulation/results.csv")
+    parser.add_argument("--output", default="results/plots/energy_comparison.png")
     args = parser.parse_args()
     df = load_or_generate_data(args.input)
     plot_energy(df, args.output)
