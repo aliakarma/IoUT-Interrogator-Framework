@@ -1,16 +1,73 @@
-﻿# Project Title
-IoUT Interrogator Framework
+﻿# IoUT Interrogator Framework
 
-## Overview
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Reproducible](https://img.shields.io/badge/Protocol-20--Seed_Reproducible-success)
 
-- IoUT behavioral signal classification for trust-aware anomaly inference.
-- Leakage-safe train/validation/test workflow with validation-only threshold tuning.
-- Reproducible multi-seed evaluation protocol across 20 independent seeds.
+IoUT Interrogator Framework is a trust-aware IoUT anomaly inference pipeline with leakage-safe evaluation, class-imbalance controls, and deterministic multi-seed reporting on both synthetic and real network telemetry.
 
-## Final Experimental Results
+## Table of Contents
+- [Highlights](#highlights)
+- [Visual Overview](#visual-overview)
+- [Datasets](#datasets)
+- [Experimental Setup](#experimental-setup)
+- [Final Results](#final-results)
+- [Reproducibility (Strict, Copy-Paste)](#reproducibility-strict-copy-paste)
+- [Installation](#installation)
+- [Usage Examples](#usage-examples)
+- [Script Catalog](#script-catalog)
+- [Configuration](#configuration)
+- [Repository Structure](#repository-structure)
+- [Citation](#citation)
+- [License](#license)
 
-### Synthetic Evaluation (20 seeds)
+## Highlights
+- Leakage-safe protocol: split, scale, and threshold calibration are strictly train/validation scoped.
+- Real-data robustness: UNSW-NB15 class-imbalance handling with weighted loss, weighted sampling, and balanced-recall thresholding.
+- Reproducible statistics: 20-seed evaluation with mean and standard deviation reporting.
+- Reviewer-ready outputs: final summary tables, split checks, confusion matrix, and publication-style report artifacts.
 
+## Visual Overview
+```mermaid
+flowchart LR
+    A[Raw Data] --> B[Leakage-Safe Split\nTrain / Val / Test]
+    B --> C[Train-Only Normalization]
+    C --> D[Model Training\nWeighted Loss + Weighted Sampler]
+    D --> E[Validation Threshold Sweep\nBalanced Recall Objective]
+    E --> F[Test Evaluation]
+    F --> G[20-Seed Aggregation\nFinal Metrics + Reports]
+```
+
+## Datasets
+
+### 1) Synthetic Behavioral Dataset
+- Purpose: controlled benchmarking across architectures and baselines.
+- Pipeline target: multi-model 20-seed robustness summary.
+
+### 2) Real Dataset: UNSW-NB15
+- Purpose: external validity under realistic imbalance.
+- Required local path:
+  - `data/raw/unsw_nb15/Training and Testing Sets/`
+- Required files (CSV): UNSW-NB15 training/testing set files.
+
+## Experimental Setup
+- Seeds: 42-61 (20 runs)
+- Splits: train 70%, validation 15%, test 15%
+- Threshold tuning: validation-only sweep over 0.45 to 0.75 using balanced recall
+- Imbalance controls:
+  - alpha-scaled BCEWithLogitsLoss (alpha = 0.7)
+  - weighted sampler with inverse-frequency exponent
+- Key constraints enforced:
+  - no test-time tuning
+  - no leakage
+  - no synthetic oversampling on real data
+
+## Final Results
+
+Only final artifacts are reported below.
+
+### Synthetic (20 seeds)
 Source: `results/synthetic_final/summary.csv`
 
 | Model | F1 (mean +/- std) | ROC-AUC (mean +/- std) | PR-AUC (mean +/- std) | Balanced Accuracy (mean +/- std) |
@@ -20,85 +77,170 @@ Source: `results/synthetic_final/summary.csv`
 | logistic_regression | 0.6667 +/- 0.0000 | 0.8638 +/- 0.0000 | 0.7572 +/- 0.0000 | 0.7758 +/- 0.0000 |
 | lstm | 0.6444 +/- 0.0403 | 0.8199 +/- 0.0422 | 0.6973 +/- 0.0345 | 0.7513 +/- 0.0216 |
 
-### Real-World Evaluation (UNSW-NB15, 20 seeds)
-
-Source: `results/unsw_final/summary.csv`
+### Real (UNSW-NB15, balanced final, 20 seeds)
+Source: `results/unsw_final_balanced/summary.csv`
 
 | Metric | Mean +/- Std |
 | --- | --- |
-| F1 | 0.8323 +/- 0.0045 |
-| ROC-AUC | 0.9136 +/- 0.0249 |
-| PR-AUC | 0.9010 +/- 0.0371 |
-| Balanced Accuracy | 0.7273 +/- 0.0089 |
-| Recall (Class 0) | 0.4564 +/- 0.0181 |
-| Recall (Class 1) | 0.9983 +/- 0.0004 |
+| F1 | 0.8910 +/- 0.0026 |
+| ROC-AUC | 0.9251 +/- 0.0199 |
+| PR-AUC | 0.9254 +/- 0.0298 |
+| Balanced Accuracy | 0.8397 +/- 0.0041 |
+| Recall (Class 0) | 0.6961 +/- 0.0075 |
+| Recall (Class 1) | 0.9834 +/- 0.0022 |
 
-## Key Observations
+## Reproducibility (Strict, Copy-Paste)
 
-- Stable performance is observed across seeds in both synthetic and real-world settings.
-- Evaluation remains balanced under class-imbalance constraints.
-- Strong anomaly detection capability is reflected by consistently high Class 1 recall.
+### 0) System Requirements
+- OS: Linux, macOS, or Windows (PowerShell supported)
+- Python: 3.10+
+- Optional: CUDA-enabled GPU (training also works on CPU)
 
-## Reproducibility Guide
-
-### Step 1 - Setup
-
+### 1) Clone and Environment Setup
 ```bash
-git clone <repo>
-cd <repo>
+git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
+cd IoUT-Interrogator-Framework
+python -m venv .venv
+```
+
+Windows PowerShell:
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Step 2 - Synthetic Results
+Linux/macOS:
+```bash
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
+### 2) Data Preparation
+Place UNSW-NB15 CSV files in:
+```text
+data/raw/unsw_nb15/Training and Testing Sets/
+```
+
+### 3) Reproduce Final Synthetic 20-Seed Benchmark
 ```bash
 python scripts/run_multi_seed_experiments.py \
   --dataset synthetic \
-  --seeds 42-61
+  --models hybrid_temporal,lstm,random_forest,logistic_regression \
+  --seeds 42-61 \
+  --output-dir results/synthetic_final
 ```
 
-Output:
-
-- `results/synthetic_final/`
-
-### Step 3 - Real Dataset (UNSW-NB15)
-
-Download the UNSW-NB15 training and testing CSV files and place them under:
-
-- `data/raw/unsw_nb15/Training and Testing Sets/`
-
-Then run:
-
+### 4) Reproduce Final UNSW 20-Seed Balanced Evaluation
 ```bash
 python run_unsw_publication_pipeline.py \
-  --seeds 42-61
+  --seeds 42-61 \
+  --output-dir results/unsw_final_balanced
 ```
 
-Output:
-
-- `results/unsw_final/`
-
-### Step 4 - Verify Results
-
+### 5) Validate Final Outputs
 ```bash
-cat results/unsw_final/summary.csv
+python -c "import pandas as pd; print(pd.read_csv('results/synthetic_final/summary.csv'))"
+python -c "import pandas as pd; print(pd.read_csv('results/unsw_final_balanced/summary.csv'))"
+python -c "import json; print(json.load(open('results/unsw_final_balanced/validation_checks.json')))"
 ```
 
-## Reproducibility Guarantees
+## Installation
 
-- seeds: 42-61
-- leakage-safe splits
-- training-only normalization
-- deterministic pipeline
+<details>
+<summary>Dependency Notes</summary>
 
-## Important Notes
+- Core stack: PyTorch, NumPy, pandas, scikit-learn, SciPy, matplotlib.
+- Install from:
+  - `requirements.txt`
+- For CUDA, install the CUDA-compatible PyTorch build for your platform, then run the same commands above.
 
-- No test-time tuning
-- No dataset leakage
-- No artificial balancing
+</details>
 
-## Claims
+## Usage Examples
 
-- "The model demonstrates stable performance across 20 independent runs."
-- "The model achieves balanced performance on real-world data under controlled evaluation."
-- "Results are reproducible and validated under leakage-free conditions."
+### End-to-End Standard Pipeline
+```bash
+python run_pipeline.py --config configs/default.yaml
+```
+
+### Full Experiment Reproduction Script
+```bash
+python scripts/reproduce_all.py
+```
+
+### Additional Studies
+```bash
+python scripts/run_ablation_study.py
+python scripts/run_ood_evaluation.py
+python scripts/run_robustness_experiments.py
+```
+
+## Script Catalog
+
+<details>
+<summary>Documented script entry points</summary>
+
+- `run_pipeline.py`: main configurable pipeline runner.
+- `run_unsw_publication_pipeline.py`: UNSW final publication pipeline wrapper.
+- `scripts/run_unsw_publication_pipeline.py`: UNSW core evaluation implementation.
+- `scripts/run_multi_seed_experiments.py`: synthetic/baseline multi-seed benchmark runner.
+- `scripts/run_full_pipeline.py`: convenience execution for full configured run.
+- `scripts/reproduce_all.py`: one-command reproduction orchestrator.
+- `scripts/run_ablation_study.py`: ablation experiments.
+- `scripts/run_ood_evaluation.py`: out-of-distribution evaluation.
+- `scripts/run_robustness_experiments.py`: robustness experiment suite.
+- `scripts/generate_summary_table.py`: aggregate summary-table export.
+- `scripts/export_all_results.py`: consolidated results export utility.
+- `scripts/generate_figures.py`: publication figure generation.
+- `scripts/generate_pr_curve.py`: precision-recall curve artifact generation.
+- `scripts/profile_inference.py`: inference-time profiling.
+- `verify_splits.py`: split integrity validation utility.
+
+</details>
+
+## Configuration
+- Primary config file: `configs/default.yaml`
+- Main configurable groups:
+  - `data`: dataset source/path, split strategy, loader settings
+  - `model`: architecture type and dimensions
+  - `training`: epochs, learning rate, loss settings, seed
+  - `evaluation`: threshold, tuning metric, confusion-matrix export
+
+## Repository Structure
+```text
+IoUT-Interrogator-Framework/
+├── configs/          # Experiment and model configuration files
+├── data/             # Data loaders, adapters, and dataset docs
+├── docs/             # Methodology, changelog, and reproducibility notes
+├── scripts/          # Reproducible experiment entry points
+├── results/
+│   ├── synthetic_final/        # Final synthetic benchmark outputs
+│   └── unsw_final_balanced/    # Final real-data (UNSW) outputs
+├── models/           # Model architecture implementations
+├── training/         # Training loop and optimization logic
+├── evaluation/       # Metrics, threshold tuning, evaluation flow
+├── simulation/       # Simulation utilities and configs
+├── blockchain/       # Optional blockchain integration components
+├── tests/            # Automated validation tests
+├── run_pipeline.py   # Main pipeline entry point
+└── run_unsw_publication_pipeline.py  # Real-data publication pipeline entry
+```
+
+## Citation
+
+Use `CITATION.cff` when available, or the placeholder below:
+
+```bibtex
+@misc{iout_interrogator_framework,
+  title        = {IoUT Interrogator Framework: Trust-Aware IoUT Anomaly Inference},
+  author       = {Akarma, Ali and contributors},
+  year         = {2026},
+  howpublished = {GitHub repository},
+  note         = {Reproducible 20-seed synthetic and UNSW-NB15 evaluations}
+}
+```
+
+## License
+This project is released under the MIT License. See `LICENSE`.

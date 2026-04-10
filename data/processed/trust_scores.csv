@@ -1,0 +1,11 @@
+agent_id,trust_score,is_anomalous,true_label,attack_type,temperature
+420,0.4005,1,0,none,1.5
+432,0.0229,1,1,transmission_burst,1.5
+354,0.7498,0,0,none,1.5
+447,0.0249,1,1,transmission_burst,1.5
+250,0.4484,1,0,none,1.5
+318,0.3906,1,0,none,1.5
+163,0.6591,0,0,none,1.5
+309,0.6216,1,0,none,1.5
+0,0.4152,1,0,none,1.5
+453,0.0225,1,1,coordinated_insider,1.5
