@@ -72,6 +72,7 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
         use_fixed_splits=bool(data_cfg.get("use_fixed_splits", True)),
         splits_path=splits_path,
         temporal_gap=temporal_gap,
+        use_weighted_sampler=bool(data_cfg.get("use_weighted_sampler", True)),
     )
 
     train_ids = set(metadata.get("train_sensor_ids", []))
@@ -170,6 +171,7 @@ def train(model, loaders: Dict[str, Any], config: Dict[str, Any], metadata: Dict
         results_dir=results_dir,
         log_dir=log_dir,
         input_dim=int(metadata["input_dim"]),
+        train_class_counts=metadata.get("train_class_counts"),
     )
 
 

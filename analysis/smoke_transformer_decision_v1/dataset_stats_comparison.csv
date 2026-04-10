@@ -1,3 +1,0 @@
-phase,n_samples,n_legit,n_adv,adv_fraction,avg_base_feature_separation,max_base_feature_separation,min_base_feature_separation
-before,500,425,75,0.15,2.8755197525024414,4.04331111907959,1.7719255685806274
-after,500,425,75,0.15,0.9882791638374329,1.181423306465149,0.8493625521659851

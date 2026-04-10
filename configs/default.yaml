@@ -13,6 +13,7 @@ data:
   split_strategy: group
   use_fixed_splits: true
   splits_path: splits/split_v1.json
+  use_weighted_sampler: true
 
 model:
   type: hybrid_temporal
@@ -33,13 +34,14 @@ training:
   grad_clip_norm: 1.0
   loss_type: bce
   focal_gamma: 1.5
+  class_weight_alpha: 0.7
   results_dir: results/run_1
   log_dir: logs
 
 evaluation:
   threshold: 0.50
   tune_threshold: true
-  threshold_metric: f1
+  threshold_metric: balanced_recall
   save_confusion_matrix: true
 
 baseline:

@@ -1,5 +1,0 @@
-phase,model,seed,tp,tn,fp,fn
-after,transformer,42,6,65,0,6
-after,transformer,43,9,59,6,3
-after,transformer,44,12,25,40,0
-before,transformer,-1,0,0,0,0

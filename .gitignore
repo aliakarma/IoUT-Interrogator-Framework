@@ -1,4 +1,4 @@
-# Python
+# Python and virtual environments
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,104 +13,47 @@ dist/
 build/
 *.egg
 .eggs/
-pip-log.txt
-pip-delete-this-directory.txt
 
-# PyTorch checkpoints (large binaries — track with Git LFS if needed)
-model/checkpoints/*.pt
-model/checkpoints/*.pth
-model/checkpoints/*.bin
-
-# Generated data (reproducible from scripts)
-data/raw/*.csv
-data/processed/*.csv
-data/raw/*.json
-data/processed/*.json
-
-# Generated plots (reproducible from scripts)
-analysis/plots/*.png
-analysis/plots/*.pdf
-analysis/plots/*.svg
-
-# Generated simulation outputs (reproducible from scripts)
-simulation/outputs/*.csv
-simulation/outputs/*.json
-
-# Jupyter notebook checkpoints
-.ipynb_checkpoints/
-*.ipynb_checkpoints
-
-# IDE
+# IDE/editor/system
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
+Thumbs.db
 
-# Testing
+# Test and local coverage artifacts
 .pytest_cache/
 .coverage
 htmlcov/
-*.coveragerc
 
-# Logs
+# Logs and temporary files
 *.log
 logs/
+*.tmp
+*.cache
 
-# Docker
-.dockerignore
+# Notebook cache
+.ipynb_checkpoints/
+*.ipynb_checkpoints
 
 # Environment files
 .env
 .env.local
 
-# OS
-Thumbs.db
-
-# Go module cache (created by go toolchain during dependency resolution)
-root/
-
-# Temporary experiment outputs
-results/*_smoke/
-results/*_iteration*/
-results/*_science/
-results/run_*/
-results/ablation*
-results/robustness*
-results/*smoke*
-
-# Old multi-seed runs
-results/multi_seed_final/
-results/multi_seed_iteration*/
-results/multi_seed_smoke/
-
-# Old robustness runs
-results/robustness_smoke/
-results/robustness_iteration*/
-results/robustness_science/
-
-# Local archive for non-final artifacts
-results/archive/
-
-# Cache and temp
-*.tmp
-*.cache
-
-# Python cache
-__pycache__/
-
-# Checkpoints and model binaries
-*.pt
-*.pth
-
-# Keep only final result directories tracked
-!results/
-!results/synthetic_final/
-!results/synthetic_final/**
-!results/unsw_final/
-!results/unsw_final/**
-
+# Raw large UNSW files (local only)
 data/raw/unsw_nb15/UNSW-NB15_1.csv
 data/raw/unsw_nb15/UNSW-NB15_2.csv
 data/raw/unsw_nb15/UNSW-NB15_3.csv
 data/raw/unsw_nb15/UNSW-NB15_4.csv
+
+# Checkpoints/binaries
+*.pt
+*.pth
+
+# Results policy: keep only final result folders tracked
+results/*
+!results/synthetic_final/
+!results/synthetic_final/**
+!results/unsw_final_balanced/
+!results/unsw_final_balanced/**

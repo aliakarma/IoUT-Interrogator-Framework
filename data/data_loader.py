@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 
 @dataclass(frozen=True)
@@ -503,6 +503,7 @@ def build_dataloaders(
     use_fixed_splits: bool = True,
     splits_path: str | Path = "splits/split_v1.json",
     temporal_gap: int = 0,
+    use_weighted_sampler: bool = True,
 ) -> Tuple[Dict[str, DataLoader], Dict[str, Any], Tuple[List[SensorSequence], List[SensorSequence], List[SensorSequence]]]:
     samples = list(records) if records and isinstance(records[0], SensorSequence) else _records_to_sequences(records)  # type: ignore[index]
     
@@ -546,8 +547,28 @@ def build_dataloaders(
     val_dataset = IoUTDataset(val_samples, seq_len=seq_len, normalizer=normalizer)
     test_dataset = IoUTDataset(test_samples, seq_len=seq_len, normalizer=normalizer)
 
+    train_labels_array = np.asarray([int(sample.label) for sample in train_samples], dtype=np.int64)
+    class_counts = np.bincount(train_labels_array, minlength=2)
+
+    train_sampler = None
+    if use_weighted_sampler and len(train_labels_array) > 0 and np.all(class_counts > 0):
+        class_weights = (1.0 / class_counts.astype(np.float64)) ** 1.7
+        sample_weights = class_weights[train_labels_array]
+        train_sampler = WeightedRandomSampler(
+            weights=torch.as_tensor(sample_weights, dtype=torch.double),
+            num_samples=len(sample_weights),
+            replacement=True,
+        )
+
     loaders = {
-        "train": DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=_collate_fn(seq_len)),
+        "train": DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=train_sampler is None,
+            sampler=train_sampler,
+            num_workers=num_workers,
+            collate_fn=_collate_fn(seq_len),
+        ),
         "val": DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=_collate_fn(seq_len)),
         "test": DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=_collate_fn(seq_len)),
     }
@@ -590,6 +611,11 @@ def build_dataloaders(
         "train_pos_rate": float(train_labels.mean()),
         "val_pos_rate": float(val_labels.mean()),
         "test_pos_rate": float(test_labels.mean()),
+        "train_class_counts": {
+            "0": int(class_counts[0]) if len(class_counts) > 0 else 0,
+            "1": int(class_counts[1]) if len(class_counts) > 1 else 0,
+        },
+        "weighted_sampler": bool(train_sampler is not None),
         "dataset_statistics": dataset_statistics,
     }
     return loaders, metadata, (train_samples, val_samples, test_samples)

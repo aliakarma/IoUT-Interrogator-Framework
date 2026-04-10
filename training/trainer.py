@@ -64,6 +64,7 @@ def fit_model(
     results_dir: Path,
     log_dir: Path,
     input_dim: int,
+    train_class_counts: Dict[str, int] | None = None,
 ) -> Tuple[torch.nn.Module, Dict[str, Any]]:
     logger = logging.getLogger("iout.training")
     start_time = time.time()
@@ -78,14 +79,22 @@ def fit_model(
     early_stopping_patience = int(training_cfg.get("early_stopping_patience", 4))
     loss_type = str(training_cfg.get("loss_type", "bce"))
     focal_gamma = float(training_cfg.get("focal_gamma", 1.5))
+    class_weight_alpha = float(training_cfg.get("class_weight_alpha", 0.7))
 
     positive_count = 0
     negative_count = 0
-    for batch in train_loader:
-        labels = batch["label"].numpy()
-        positive_count += int(labels.sum())
-        negative_count += int(len(labels) - labels.sum())
-    pos_weight = torch.tensor([negative_count / max(positive_count, 1)], dtype=torch.float32, device=device)
+    if train_class_counts is not None:
+        negative_count = int(train_class_counts.get("0", 0))
+        positive_count = int(train_class_counts.get("1", 0))
+
+    if positive_count <= 0 or negative_count <= 0:
+        for batch in train_loader:
+            labels = batch["label"].detach().cpu().numpy()
+            positive_count += int(labels.sum())
+            negative_count += int(len(labels) - labels.sum())
+
+    base_pos_weight = negative_count / max(positive_count, 1)
+    pos_weight = torch.tensor([base_pos_weight * class_weight_alpha], dtype=torch.float32, device=device)
 
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -150,6 +159,9 @@ def fit_model(
         "early_stopping_patience": early_stopping_patience,
         "loss_type": loss_type,
         "focal_gamma": focal_gamma,
+        "class_weight_alpha": class_weight_alpha,
+        "train_class_counts": {"0": int(negative_count), "1": int(positive_count)},
+        "pos_weight": float(base_pos_weight * class_weight_alpha),
     }
     if history:
         final_gap = float(history[-1]["val_loss"] - history[-1]["train_loss"])
