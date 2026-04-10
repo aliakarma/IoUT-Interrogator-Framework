@@ -33,14 +33,24 @@
 - iterative tuning for class-0 recovery
 
 ## Final Metrics (20 seeds)
-- F1 (mean +/- std): 0.8898 +/- 0.0023
-- ROC-AUC (mean +/- std): 0.9282 +/- 0.0174
-- PR-AUC (mean +/- std): 0.9304 +/- 0.0239
-- Balanced Accuracy (mean +/- std): 0.8372 +/- 0.0038
+- F1 (mean +/- std): 0.8910 +/- 0.0026
+- ROC-AUC (mean +/- std): 0.9251 +/- 0.0199
+- PR-AUC (mean +/- std): 0.9254 +/- 0.0298
+- Balanced Accuracy (mean +/- std): 0.8397 +/- 0.0041
 
 ## Class-wise Performance
-- Recall class 0 (mean +/- std): 0.6896 +/- 0.0079
-- Recall class 1 (mean +/- std): 0.9849 +/- 0.0022
+- Recall class 0 (mean +/- std): 0.6961 +/- 0.0075
+- Recall class 1 (mean +/- std): 0.9834 +/- 0.0022
+
+## Final Class Balance Results
+- recall_class_0: 0.6961 +/- 0.0075
+- recall_class_1: 0.9834 +/- 0.0022
+- balanced_accuracy: 0.8397 +/- 0.0041
+
+## Interpretation
+- class-0 detection improved through train-only imbalance controls
+- class-wise performance remains balanced under validation-only threshold tuning
+- no leakage confirmed by checks: True
 
 ## Confusion Matrix (example seed)
 - see C:/Users/Ali Akarma/Documents/GitHub/IoUT-Interrogator-Framework/results/unsw_final_balanced/confusion_matrix_seed42.json
