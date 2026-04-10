@@ -163,3 +163,35 @@ def load_unsw_nb15_records(
     print(f"[UNSW Loader] Positive rate: {y.mean():.4f}")
     
     return records
+
+
+def load_unsw_nb15_tabular(
+    source: str | Path,
+    max_rows: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load UNSW-NB15 as tabular features/labels without sequence construction.
+
+    This is used by publication-grade pipelines that must split raw rows first,
+    then scale train-only, and build sequences separately per split.
+    """
+    path = Path(source)
+    if not path.exists():
+        raise FileNotFoundError(f"UNSW-NB15 CSV not found: {path}")
+
+    csv_files = _discover_csv_inputs(path)
+    frames = [_normalize_columns(pd.read_csv(file_path)) for file_path in csv_files]
+    df = pd.concat(frames, axis=0, ignore_index=True)
+    df = _maybe_attach_gt_labels(df, source_path=path)
+
+    if max_rows is not None and max_rows > 0:
+        df = df.head(int(max_rows)).copy()
+
+    _validate_columns(df)
+    y = _extract_binary_labels(df)
+    X = extract_behavioral_features(df).astype(np.float32)
+
+    print(f"[UNSW Tabular] Loaded {len(X)} raw rows")
+    print(f"[UNSW Tabular] Label distribution: {np.bincount(y)}")
+    print(f"[UNSW Tabular] Positive rate: {y.mean():.4f}")
+
+    return X, y
