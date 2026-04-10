@@ -93,3 +93,4 @@ data/raw/unsw_nb15/UNSW-NB15_2.csv
 data/raw/unsw_nb15/UNSW-NB15_3.csv
 data/raw/unsw_nb15/UNSW-NB15_4.csv
 *.pt
+/results/unsw_smoke_fixed
