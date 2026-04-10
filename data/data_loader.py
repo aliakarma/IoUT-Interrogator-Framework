@@ -552,7 +552,7 @@ def build_dataloaders(
 
     train_sampler = None
     if use_weighted_sampler and len(train_labels_array) > 0 and np.all(class_counts > 0):
-        class_weights = 1.0 / class_counts.astype(np.float64)
+        class_weights = (1.0 / class_counts.astype(np.float64)) ** 1.5
         sample_weights = class_weights[train_labels_array]
         train_sampler = WeightedRandomSampler(
             weights=torch.as_tensor(sample_weights, dtype=torch.double),

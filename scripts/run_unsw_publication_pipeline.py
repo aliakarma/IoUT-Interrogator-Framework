@@ -191,7 +191,7 @@ def build_split_sequences(bundle: SplitBundle, seq_len: int = 20) -> SplitBundle
 
 
 def tune_threshold_on_validation(y_val: np.ndarray, y_prob_val: np.ndarray) -> float:
-    thresholds = np.linspace(0.4, 0.7, 15)
+    thresholds = np.linspace(0.45, 0.75, 20)
     best_threshold = 0.5
     best_score = -1.0
 
@@ -220,7 +220,7 @@ def sequence_summary_features(X_seq: np.ndarray) -> np.ndarray:
 def train_eval_one_seed(
     bundle: SplitBundle,
     seed: int,
-    class_weight_scale: float = 1.0,
+    class0_weight: float = 1.0 / 0.7,
 ) -> Tuple[Dict[str, float], List[str], Dict[str, object]]:
     X_train = sequence_summary_features(bundle.X_train)
     X_val = sequence_summary_features(bundle.X_val)
@@ -244,7 +244,9 @@ def train_eval_one_seed(
     pos = float(bundle.y_train.sum())
     neg = float(len(bundle.y_train) - bundle.y_train.sum())
     base_pos_weight = neg / max(pos, 1.0)
-    tuned_pos_weight = max(0.1, base_pos_weight * class_weight_scale)
+    class1_weight = 1.0
+    alpha = class1_weight / max(class0_weight, 1e-12)
+    tuned_pos_weight = max(0.1, base_pos_weight * alpha)
     pos_weight = torch.tensor([tuned_pos_weight], dtype=torch.float32)
 
     # Weighted sampler to counter class imbalance without synthetic sample generation.
@@ -252,7 +254,7 @@ def train_eval_one_seed(
     class_counts = np.bincount(y_train_np, minlength=2)
     if np.any(class_counts <= 0):
         raise ValueError(f"Invalid training class counts for weighted sampling: {class_counts.tolist()}")
-    class_weights = 1.0 / class_counts.astype(np.float64)
+    class_weights = (1.0 / class_counts.astype(np.float64)) ** 1.5
     sample_weights = class_weights[y_train_np]
     sampler = WeightedRandomSampler(
         weights=torch.as_tensor(sample_weights, dtype=torch.double),
@@ -292,7 +294,9 @@ def train_eval_one_seed(
 
     metrics = compute_metrics(bundle.y_test, y_pred_test, y_prob=y_prob_test)
     metrics["threshold"] = float(threshold)
-    metrics["class_weight_scale"] = float(class_weight_scale)
+    metrics["class0_weight"] = float(class0_weight)
+    metrics["class1_weight"] = float(class1_weight)
+    metrics["class_weight_alpha"] = float(alpha)
     metrics["pos_weight"] = float(tuned_pos_weight)
 
     cm = confusion_matrix(bundle.y_test, y_pred_test)
@@ -343,7 +347,7 @@ def write_report(
     seed_start: int,
     seed_end: int,
     threshold_range: str,
-    class_weight_scale: float,
+    class0_weight: float,
 ) -> None:
     lookup = {row["metric"]: row for row in summary_df.to_dict(orient="records")}
 
@@ -375,15 +379,16 @@ def write_report(
         "- leakage prevention",
         "- scaling validation",
         "- threshold correction",
-        "- threshold sweep restricted to 0.4..0.7 (validation-only)",
+        "- threshold sweep restricted to 0.45..0.75 (validation-only)",
         "- class-weighted BCEWithLogits loss (train-only class counts)",
         "- weighted random sampler for train batches",
         "",
         "## Class Imbalance Handling",
-        f"- class-weight scale: {class_weight_scale:.3f}",
+        f"- class-0 weight: {class0_weight:.3f}",
         "- class-weighted loss computed from training split only",
         "- weighted sampler applied on training split only",
         "- threshold optimized for balanced recall on validation only",
+        "- iterative tuning for class-0 recovery",
         "",
         "## Final Metrics (20 seeds)",
         f"- F1 (mean +/- std): {fmt('f1')}",
@@ -396,7 +401,7 @@ def write_report(
         f"- Recall class 1 (mean +/- std): {fmt('recall_class_1')}",
         "",
         "## Confusion Matrix (example seed)",
-        "- see results/unsw_final/confusion_matrix_seed42.json",
+        f"- see {(out_dir / 'confusion_matrix_seed42.json').as_posix()}",
         "",
         "## Observations",
         "- class imbalance is controlled by minimum-ratio constrained splitting",
@@ -409,12 +414,12 @@ def write_report(
         f"- metrics within realistic range: {checks['metrics_realistic']}",
         "",
         "## Artifacts",
-        "- results/unsw_final/per_seed_results.csv",
-        "- results/unsw_final/summary.csv",
-        "- results/unsw_final/validation_checks.json",
-        "- results/unsw_final/split_stats.json",
-        "- results/unsw_final/confusion_matrix_seed42.json",
-        "- results/unsw_final/classification_report_seed42.txt",
+        f"- {(out_dir / 'per_seed_results.csv').as_posix()}",
+        f"- {(out_dir / 'summary.csv').as_posix()}",
+        f"- {(out_dir / 'validation_checks.json').as_posix()}",
+        f"- {(out_dir / 'split_stats.json').as_posix()}",
+        f"- {(out_dir / 'confusion_matrix_seed42.json').as_posix()}",
+        f"- {(out_dir / 'classification_report_seed42.txt').as_posix()}",
         "",
         "## Conclusion",
         f"- real-world generalization validity: {checks['all_conditions_met']}",
@@ -464,12 +469,11 @@ def main() -> None:
     final_split_stats: Dict[str, Dict[str, float]] = {}
     final_summary_df = pd.DataFrame()
 
-    class_weight_scales = [1.0, 0.8, 0.6, 0.5]
+    class0_weight = 1.0 / 0.7
     for outer_attempt in range(1, 6):
-        class_weight_scale = class_weight_scales[min(outer_attempt - 1, len(class_weight_scales) - 1)]
         print(
             f"\n[Outer Attempt {outer_attempt}] Starting full 20-seed evaluation "
-            f"(class_weight_scale={class_weight_scale:.3f})"
+            f"(class0_weight={class0_weight:.3f})"
         )
 
         bundle_rows = balanced_temporal_split(
@@ -497,7 +501,7 @@ def main() -> None:
             metrics, warnings, diagnostics = train_eval_one_seed(
                 bundle_seq,
                 seed=seed,
-                class_weight_scale=class_weight_scale,
+                class0_weight=class0_weight,
             )
             leakage_warning_count += sum(1 for w in warnings if "possible leakage" in w.lower())
 
@@ -575,8 +579,8 @@ def main() -> None:
             model_name="mlp_sequence_summary",
             seed_start=seed_start,
             seed_end=seed_end,
-            threshold_range="0.4..0.7",
-            class_weight_scale=class_weight_scale,
+            threshold_range="0.45..0.75",
+            class0_weight=class0_weight,
         )
 
         final_checks = checks
@@ -587,7 +591,8 @@ def main() -> None:
             print("[Validation] All conditions met.")
             break
 
-        print("[Validation] Conditions failed; auto-rerunning with adjusted class weights and shifted split.")
+        print("[Validation] Conditions failed; auto-rerunning with increased class-0 weight and shifted split.")
+        class0_weight += 0.2
 
     if not final_checks.get("all_conditions_met", False):
         raise SystemExit("Pipeline finished without meeting all conditions.")

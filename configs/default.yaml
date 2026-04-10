@@ -34,6 +34,7 @@ training:
   grad_clip_norm: 1.0
   loss_type: bce
   focal_gamma: 1.5
+  class_weight_alpha: 0.7
   results_dir: results/run_1
   log_dir: logs
 
