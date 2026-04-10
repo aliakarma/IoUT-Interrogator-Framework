@@ -41,7 +41,7 @@ def load_data(config: Dict[str, Any]) -> Tuple[Dict[str, IoUTDataset], Dict[str,
 
     if dataset_name == "unsw_nb15":
         default_synthetic_path = "data/raw/behavioral_sequences.json"
-        unsw_default_path = str(data_cfg.get("unsw_path", "data/raw/unsw_nb15/UNSW_NB15_training-set.csv"))
+        unsw_default_path = str(data_cfg.get("unsw_path", "data/raw/unsw_nb15"))
         source_path = str(data_cfg.get("path", default_synthetic_path))
         if source_path == default_synthetic_path:
             source_path = unsw_default_path

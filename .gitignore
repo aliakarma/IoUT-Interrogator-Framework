@@ -88,3 +88,7 @@ results/robustness_science/
 
 # Local archive for non-final artifacts
 results/archive/
+data/raw/unsw_nb15/UNSW-NB15_1.csv
+data/raw/unsw_nb15/UNSW-NB15_2.csv
+data/raw/unsw_nb15/UNSW-NB15_3.csv
+data/raw/unsw_nb15/UNSW-NB15_4.csv

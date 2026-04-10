@@ -1,7 +1,7 @@
 data:
   dataset: synthetic
   path: data/raw/behavioral_sequences.json
-  unsw_path: data/raw/unsw_nb15/UNSW_NB15_training-set.csv
+  unsw_path: data/raw/unsw_nb15
   format: auto
   seq_len: 64
   train_split: 0.70

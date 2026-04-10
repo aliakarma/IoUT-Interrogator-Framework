@@ -66,13 +66,20 @@ Assumptions used by robustness experiments:
 ## UNSW-NB15 Usage
 
 Expected default path for UNSW runs:
-- data/raw/unsw_nb15/UNSW_NB15_training-set.csv
+- data/raw/unsw_nb15
+
+If your source is the UNSW SharePoint folder, copy these files into data/raw/unsw_nb15:
+- Training and Testing Sets/UNSW_NB15_training-set.csv
+- Training and Testing Sets/UNSW_NB15_testing-set.csv
+- or UNSW-NB15_1.csv, UNSW-NB15_2.csv, UNSW-NB15_3.csv, UNSW-NB15_4.csv
+- optional: NUSW-NB15_GT.csv (used only if direct row-wise length alignment is possible)
+- optional metadata: NUSW-NB15_features.csv, UNSW-NB15_LIST_EVENTS.csv, description PDF
 
 Single run:
-- python run_pipeline.py --dataset unsw_nb15 --data-path data/raw/unsw_nb15/UNSW_NB15_training-set.csv
+- python run_pipeline.py --dataset unsw_nb15 --data-path data/raw/unsw_nb15
 
 Multi-seed real-data benchmark:
-- python scripts/run_multi_seed_experiments.py --dataset unsw_nb15 --data-path data/raw/unsw_nb15/UNSW_NB15_training-set.csv --models hybrid_temporal,lstm,random_forest --seeds 42-61 --output-dir results/real_data_20seed --aggregate-output results/real_data_20seed/aggregate_metrics.json --tests-output results/real_data_20seed/statistical_tests.json --final-table-output results/real_data_20seed/final_results_table.csv
+- python scripts/run_multi_seed_experiments.py --dataset unsw_nb15 --data-path data/raw/unsw_nb15 --models hybrid_temporal,lstm,random_forest --seeds 42-61 --output-dir results/real_data_20seed --aggregate-output results/real_data_20seed/aggregate_metrics.json --tests-output results/real_data_20seed/statistical_tests.json --final-table-output results/real_data_20seed/final_results_table.csv
 
 Real-data figure generation:
 - python scripts/generate_figures.py --results-dir results/real_data_20seed --aggregate-path results/real_data_20seed/aggregate_metrics.json --figures-dir results/figures_real --figures-data-dir results/figures_data_real --name-suffix _real --skip-robustness
