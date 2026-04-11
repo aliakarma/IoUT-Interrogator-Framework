@@ -134,9 +134,7 @@ data/raw/unsw_nb15/Training and Testing Sets/
 
 ### 3) Reproduce Final Synthetic 20-Seed Benchmark
 ```bash
-python scripts/run_multi_seed_experiments.py \
-  --dataset synthetic \
-  --seeds 42-61
+python scripts/run_multi_seed_experiments.py --dataset synthetic --seeds 42-61
 ```
 
 ### 4) Reproduce Final UNSW 20-Seed Balanced Evaluation
