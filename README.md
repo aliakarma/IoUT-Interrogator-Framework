@@ -207,19 +207,7 @@ IoUT-Interrogator-Framework/
 └── run_unsw_publication_pipeline.py  # Real-data publication pipeline entry
 ```
 
-## Citation
 
-Use `CITATION.cff` when available, or the placeholder below:
-
-```bibtex
-@misc{iout_interrogator_framework,
-  title        = {IoUT Interrogator Framework: Trust-Aware IoUT Anomaly Inference},
-  author       = {Akarma, Ali and contributors},
-  year         = {2026},
-  howpublished = {GitHub repository},
-  note         = {Reproducible 20-seed synthetic and UNSW-NB15 evaluations}
-}
-```
 
 ## License
 This project is released under the MIT License. See `LICENSE`.
