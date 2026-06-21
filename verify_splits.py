@@ -32,9 +32,9 @@ print(f"  overlap(val, test):   {overlap_vt}")
 print(f"  Total samples covered: {len(train_set | val_set | test_set)}/{splits['n_samples']}")
 
 if overlap_tv == 0 and overlap_tt == 0 and overlap_vt == 0:
-    print("\n✓✓✓ ZERO LEAKAGE - SPLITS ARE VALID AND REPRODUCIBLE ✓✓✓")
+    print("\n*** ZERO LEAKAGE - SPLITS ARE VALID AND REPRODUCIBLE ***")
 else:
-    print("\n✗ LEAKAGE DETECTED - INVALID SPLITS")
+    print("\n[ERROR] LEAKAGE DETECTED - INVALID SPLITS")
 
 # Verify split ratios
 print(f"\nSplit Ratios:")

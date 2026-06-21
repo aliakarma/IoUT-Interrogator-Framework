@@ -2,5 +2,5 @@
   "mode": "baseline",
   "results_dir": "results\\multi_seed_20seeds\\moving_average\\seed_42",
   "params": 0,
-  "runtime_seconds": 0.049764156341552734
+  "runtime_seconds": 0.04259133338928223
 }

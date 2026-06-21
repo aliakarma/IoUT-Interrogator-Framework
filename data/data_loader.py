@@ -540,8 +540,8 @@ def build_dataloaders(
             "Normalizer fit failed: missing mean_/std_ attributes"
         assert normalizer.mean_ is not None and normalizer.std_ is not None, \
             "Normalizer fit failed: mean_/std_ are None"
-        print(f"[Scaler Validation] ✓ Normalizer fitted on {len(train_samples)} training sequences only")
-        print(f"[Scaler Validation] ✓ Mean shape: {normalizer.mean_.shape}, Std shape: {normalizer.std_.shape}")
+        print(f"[Scaler Validation] [OK] Normalizer fitted on {len(train_samples)} training sequences only")
+        print(f"[Scaler Validation] [OK] Mean shape: {normalizer.mean_.shape}, Std shape: {normalizer.std_.shape}")
 
     train_dataset = IoUTDataset(train_samples, seq_len=seq_len, normalizer=normalizer)
     val_dataset = IoUTDataset(val_samples, seq_len=seq_len, normalizer=normalizer)

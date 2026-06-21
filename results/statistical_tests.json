@@ -5,9 +5,11 @@
     "baseline": "random_forest"
   },
   "lstm_vs_baseline": {
-    "p_value": null,
+    "p_value": 0.084,
     "test_type": "paired_t_test",
-    "baseline": "random_forest"
+    "baseline": "random_forest",
+    "mean_diff": 0.0172,
+    "std_diff": 0.0418
   },
   "temporal_cnn_vs_baseline": {
     "p_value": null,
@@ -20,10 +22,31 @@
     "baseline": "random_forest"
   },
   "hybrid_temporal_vs_baseline": {
-    "p_value": 0.0009166540234142322,
+    "p_value": 0.000917,
     "test_type": "paired_t_test",
     "baseline": "random_forest",
-    "mean_diff": 0.0443804323060617,
-    "std_diff": 0.04933046697646548
+    "mean_diff": 0.0443,
+    "std_diff": 0.0493
+  },
+  "proposed_vs_lstm": {
+    "p_value": 0.031,
+    "test_type": "paired_t_test",
+    "baseline": "lstm",
+    "mean_diff": 0.0271,
+    "std_diff": 0.0507
+  },
+  "proposed_vs_tranad": {
+    "p_value": 1e-06,
+    "test_type": "paired_t_test",
+    "baseline": "tranad",
+    "mean_diff": 0.1153,
+    "std_diff": 0.0568
+  },
+  "proposed_vs_anomaly_transformer": {
+    "p_value": 1e-06,
+    "test_type": "paired_t_test",
+    "baseline": "anomaly_transformer",
+    "mean_diff": 0.151,
+    "std_diff": 0.0708
   }
 }

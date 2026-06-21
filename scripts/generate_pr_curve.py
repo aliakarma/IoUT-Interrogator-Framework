@@ -136,7 +136,7 @@ def main():
         model_name=args.model_name,
     )
     
-    print(f"\n✓ PR curve generation complete")
+    print(f"\n[OK] PR curve generation complete")
     print(f"  Data: {data_output}")
     print(f"  Plot: {fig_output}")
     print(f"  PR-AUC: {pr_auc:.4f}")

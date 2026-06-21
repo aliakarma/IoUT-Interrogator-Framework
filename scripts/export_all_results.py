@@ -659,47 +659,47 @@ def export_results(
     
     if not main_metrics.empty:
         main_metrics.to_csv(output_path / 'main_metrics.csv', index=False)
-        logger.info(f"✓ Exported main_metrics.csv ({len(main_metrics)} rows)")
+        logger.info(f"[OK] Exported main_metrics.csv ({len(main_metrics)} rows)")
     
     if not baseline_comparison.empty:
         baseline_comparison.to_csv(output_path / 'baseline_comparison.csv', index=False)
-        logger.info(f"✓ Exported baseline_comparison.csv ({len(baseline_comparison)} rows)")
+        logger.info(f"[OK] Exported baseline_comparison.csv ({len(baseline_comparison)} rows)")
     
     if significance_results is not None and not significance_results.empty:
         significance_results.to_csv(output_path / 'significance_results.csv', index=False)
-        logger.info(f"✓ Exported significance_results.csv ({len(significance_results)} rows)")
+        logger.info(f"[OK] Exported significance_results.csv ({len(significance_results)} rows)")
     else:
-        logger.info("⊘ Skipping significance_results.csv (not available)")
+        logger.info("[SKIP] Skipping significance_results.csv (not available)")
     
     if not ood_summary.empty:
         ood_summary.to_csv(output_path / 'ood_summary.csv', index=False)
-        logger.info(f"✓ Exported ood_summary.csv ({len(ood_summary)} rows)")
+        logger.info(f"[OK] Exported ood_summary.csv ({len(ood_summary)} rows)")
     
     if not ablation_summary.empty:
         ablation_summary.to_csv(output_path / 'ablation_summary.csv', index=False)
-        logger.info(f"✓ Exported ablation_summary.csv ({len(ablation_summary)} rows)")
+        logger.info(f"[OK] Exported ablation_summary.csv ({len(ablation_summary)} rows)")
     
     if not calibration_summary.empty:
         calibration_summary.to_csv(output_path / 'calibration_summary.csv', index=False)
-        logger.info(f"✓ Exported calibration_summary.csv ({len(calibration_summary)} rows)")
+        logger.info(f"[OK] Exported calibration_summary.csv ({len(calibration_summary)} rows)")
     else:
-        logger.info("⊘ Skipping calibration_summary.csv (not available)")
+        logger.info("[SKIP] Skipping calibration_summary.csv (not available)")
     
     if not combined_table.empty:
         combined_table.to_csv(output_path / 'combined_results_table.csv', index=False)
-        logger.info(f"✓ Exported combined_results_table.csv ({len(combined_table)} rows)")
+        logger.info(f"[OK] Exported combined_results_table.csv ({len(combined_table)} rows)")
 
     if not classification_results.empty:
         classification_results.to_csv(output_path / 'classification_results.csv', index=False)
-        logger.info(f"✓ Exported classification_results.csv ({len(classification_results)} rows)")
+        logger.info(f"[OK] Exported classification_results.csv ({len(classification_results)} rows)")
     else:
-        logger.info("⊘ Skipping classification_results.csv (not available)")
+        logger.info("[SKIP] Skipping classification_results.csv (not available)")
 
     if not simulation_results.empty:
         simulation_results.to_csv(output_path / 'simulation_results.csv', index=False)
-        logger.info(f"✓ Exported simulation_results.csv ({len(simulation_results)} rows)")
+        logger.info(f"[OK] Exported simulation_results.csv ({len(simulation_results)} rows)")
     else:
-        logger.info("⊘ Skipping simulation_results.csv (not available)")
+        logger.info("[SKIP] Skipping simulation_results.csv (not available)")
     
     logger.info(f"\n=== SUCCESS ===")
     logger.info(f"All results exported to: {output_path.resolve()}")

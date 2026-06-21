@@ -2,5 +2,5 @@
   "mode": "baseline",
   "results_dir": "results\\multi_seed_20seeds\\random_forest\\seed_54",
   "params": 0,
-  "runtime_seconds": 0.571990966796875
+  "runtime_seconds": 0.3983306884765625
 }

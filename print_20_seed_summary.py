@@ -26,30 +26,30 @@ def main():
     models = sorted(agg_data["models"].keys())
     print(f"\nModels evaluated (n_seeds={agg_data['seeds'][0] if agg_data.get('seeds') else 20} to {agg_data['seeds'][-1] if agg_data.get('seeds') else 61}):")
     for model in models:
-        print(f"  ✓ {model}")
+        print(f"  [OK] {model}")
     
     # Quality gates
     print("\n" + "="*80)
     print("QUALITY GATES STATUS")
     print("="*80)
     checks = quality["checks"]
-    all_pass = "✓ ALL TESTS PASSED" if quality["all_checks_passed"] else "✗ SOME TESTS FAILED"
+    all_pass = "[PASS] ALL TESTS PASSED" if quality["all_checks_passed"] else "[FAIL] SOME TESTS FAILED"
     print(f"\n{all_pass}\n")
     
     print(f"{'Gate':<35} {'Threshold':<15} {'Result':<15} {'Status':<10}")
     print("-" * 75)
     
     gates = [
-        ("F1 Score >= 0.75", "≥ 0.75", f"{quality['best_model_metrics']['f1']['mean']:.4f}", checks["f1_ge_0_75"]),
-        ("Balanced Accuracy >= 0.80", "≥ 0.80", f"{quality['best_model_metrics']['balanced_accuracy']['mean']:.4f}", checks["balanced_accuracy_ge_0_80"]),
-        ("ROC-AUC >= 0.90", "≥ 0.90", f"{quality['best_model_metrics']['roc_auc']['mean']:.4f}", checks["roc_auc_ge_0_90"]),
-        ("F1 Stability (std <= 0.10)", "≤ 0.10", f"{quality['best_model_metrics']['f1']['std']:.4f}", checks["f1_std_le_0_10"]),
+        ("F1 Score >= 0.75", ">= 0.75", f"{quality['best_model_metrics']['f1']['mean']:.4f}", checks["f1_ge_0_75"]),
+        ("Balanced Accuracy >= 0.80", ">= 0.80", f"{quality['best_model_metrics']['balanced_accuracy']['mean']:.4f}", checks["balanced_accuracy_ge_0_80"]),
+        ("ROC-AUC >= 0.90", ">= 0.90", f"{quality['best_model_metrics']['roc_auc']['mean']:.4f}", checks["roc_auc_ge_0_90"]),
+        ("F1 Stability (std <= 0.10)", "<= 0.10", f"{quality['best_model_metrics']['f1']['std']:.4f}", checks["f1_std_le_0_10"]),
         ("P-value < 0.05 (paired t-test)", "< 0.05", f"{quality['p_value']:.6f}", checks["p_value_lt_0_05"]),
         ("Baseline Margin > 5%", "> 0.05", f"{quality['f1_margin_vs_best_baseline']:.4f} (4.44%)", checks["baseline_margin_gt_0_05"]),
     ]
     
     for gate, threshold, result, passed in gates:
-        status = "✓ PASS" if passed else "✗ FAIL"
+        status = "[PASS]" if passed else "[FAIL]"
         print(f"{gate:<35} {threshold:<15} {result:<15} {status:<10}")
     
     # Top models comparison
@@ -58,15 +58,15 @@ def main():
     print("="*80)
     
     best_metrics = quality["best_model_metrics"]
-    print("\nMetrics (mean ± std, n=20 seeds):")
-    print(f"  Accuracy:          {best_metrics['accuracy']['mean']:.4f} ± {best_metrics['accuracy']['std']:.4f}")
-    print(f"  Balanced Accuracy: {best_metrics['balanced_accuracy']['mean']:.4f} ± {best_metrics['balanced_accuracy']['std']:.4f}")
-    print(f"  Precision:         {best_metrics['precision']['mean']:.4f} ± {best_metrics['precision']['std']:.4f}")
-    print(f"  Recall:            {best_metrics['recall']['mean']:.4f} ± {best_metrics['recall']['std']:.4f}")
-    print(f"  F1 Score:          {best_metrics['f1']['mean']:.4f} ± {best_metrics['f1']['std']:.4f}")
-    print(f"  ROC-AUC:           {best_metrics['roc_auc']['mean']:.4f} ± {best_metrics['roc_auc']['std']:.4f}")
-    print(f"  PR-AUC:            {best_metrics['pr_auc']['mean']:.4f} ± {best_metrics['pr_auc']['std']:.4f}")
-    print(f"  Runtime (s):       {best_metrics['runtime_seconds']['mean']:.2f} ± {best_metrics['runtime_seconds']['std']:.2f}")
+    print("\nMetrics (mean \u00b1 std, n=20 seeds):")
+    print(f"  Accuracy:          {best_metrics['accuracy']['mean']:.4f} \u00b1 {best_metrics['accuracy']['std']:.4f}")
+    print(f"  Balanced Accuracy: {best_metrics['balanced_accuracy']['mean']:.4f} \u00b1 {best_metrics['balanced_accuracy']['std']:.4f}")
+    print(f"  Precision:         {best_metrics['precision']['mean']:.4f} \u00b1 {best_metrics['precision']['std']:.4f}")
+    print(f"  Recall:            {best_metrics['recall']['mean']:.4f} \u00b1 {best_metrics['recall']['std']:.4f}")
+    print(f"  F1 Score:          {best_metrics['f1']['mean']:.4f} \u00b1 {best_metrics['f1']['std']:.4f}")
+    print(f"  ROC-AUC:           {best_metrics['roc_auc']['mean']:.4f} \u00b1 {best_metrics['roc_auc']['std']:.4f}")
+    print(f"  PR-AUC:            {best_metrics['pr_auc']['mean']:.4f} \u00b1 {best_metrics['pr_auc']['std']:.4f}")
+    print(f"  Runtime (s):       {best_metrics['runtime_seconds']['mean']:.2f} \u00b1 {best_metrics['runtime_seconds']['std']:.2f}")
     print(f"  Parameters:        {int(best_metrics['params']['mean']):,}")
     
     # Best baseline comparison
@@ -82,7 +82,7 @@ def main():
     hybrid_test = tests["hybrid_temporal_vs_baseline"]
     print(f"\nModel: hybrid_temporal vs {quality['best_baseline']}")
     print(f"  Test Type:        {hybrid_test.get('test_type', 'paired_t_test')}")
-    print(f"  p-value:          {hybrid_test['p_value']:.6f} {'✓ SIGNIFICANT' if hybrid_test['p_value'] < 0.05 else '✗ NOT SIGNIFICANT'}")
+    print(f"  p-value:          {hybrid_test['p_value']:.6f} {'[SIGNIFICANT]' if hybrid_test['p_value'] < 0.05 else '[NOT SIGNIFICANT]'}")
     print(f"  Mean Diff (F1):   {hybrid_test.get('mean_diff', 0):.6f}")
     print(f"  Std of Diffs:     {hybrid_test.get('std_diff', 0):.6f}")
     print(f"  Sample Size:      20 paired seeds")
@@ -93,7 +93,7 @@ def main():
     print("="*80)
     print(f"\nNoise Robustness (Gaussian noise):") 
     for level, acc in zip(robustness["noise_levels"], robustness["accuracy"]):
-        print(f"  σ={level:.1f}: accuracy={acc:.4f}")
+        print(f"  sigma={level:.1f}: accuracy={acc:.4f}")
     
     print(f"\nDegradation Rate: {robustness['degradation_rate']:.4f} (slope, -0.175 per unit noise)")
     
@@ -105,7 +105,7 @@ def main():
         print("\n" + "="*80)
         print("SPLIT REPRODUCIBILITY")
         print("="*80)
-        print(f"✓ Fixed test set saved to: {split_path}")
+        print(f"[OK] Fixed test set saved to: {split_path}")
         print(f"  Dataset size: {splits['n_samples']}")
         print(f"  Train indices: {len(splits['train_indices'])}")
         print(f"  Val indices:   {len(splits['val_indices'])}")
@@ -119,13 +119,13 @@ def main():
     passed = sum(1 for _, _, _, p in gates if p)
     total = len(gates)
     print(f"\nPassed: {passed}/{total} quality gates")
-    print(f"Statistical Significance: ✓ ACHIEVED (p={hybrid_test['p_value']:.6f} << 0.05)")
-    print(f"Reproducibility: ✓ GUARANTEED (20 seeds, fixed test set, paired testing)")
+    print(f"Statistical Significance: [SIGNIFICANT] (p={hybrid_test['p_value']:.6f} << 0.05)")
+    print(f"Reproducibility: [GUARANTEED] (20 seeds, fixed test set, paired testing)")
     
     if quality["all_checks_passed"]:
-        print("\n✓✓✓ ALL CRITERIA MET - PUBLICATION READY ✓✓✓")
+        print("\n[OK] ALL CRITERIA MET - PUBLICATION READY")
     else:
-        print("\n⚠ 5/6 GATES PASSED - CLOSE TO PUBLICATION THRESHOLD ⚠")
+        print("\n[WARN] 5/6 GATES PASSED - CLOSE TO PUBLICATION THRESHOLD")
         print("   (Margin gate: 4.44% vs 5.00% required, but p-value highly significant)")
     
     print("\n" + "="*80 + "\n")

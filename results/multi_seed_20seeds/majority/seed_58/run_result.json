@@ -5,14 +5,16 @@
     "mode": "baseline",
     "results_dir": "results\\multi_seed_20seeds\\majority\\seed_58",
     "params": 0,
-    "runtime_seconds": 0.020378828048706055
+    "runtime_seconds": 0.02403092384338379
   },
   "eval": {
-    "accuracy": 0.84,
+    "accuracy": 0.16,
     "balanced_accuracy": 0.5,
-    "precision": 0.0,
-    "recall": 0.0,
-    "f1": 0.0,
+    "precision": 0.16,
+    "recall": 1.0,
+    "recall_class_0": 0.0,
+    "recall_class_1": 1.0,
+    "f1": 0.2758620689655173,
     "roc_auc": 0.5,
     "pr_auc": 0.16,
     "class_distribution": {
@@ -21,33 +23,47 @@
     },
     "per_class_precision_recall": {
       "class_0": {
-        "precision": 0.84,
-        "recall": 1.0
-      },
-      "class_1": {
         "precision": 0.0,
         "recall": 0.0
+      },
+      "class_1": {
+        "precision": 0.16,
+        "recall": 1.0
       }
     },
     "confusion_matrix": {
-      "tn": 63,
-      "fp": 0,
-      "fn": 12,
-      "tp": 0
+      "tn": 0,
+      "fp": 63,
+      "fn": 0,
+      "tp": 12
     },
     "confusion_matrix_normalized": {
-      "tn": 1.0,
-      "fp": 0.0,
-      "fn": 1.0,
-      "tp": 0.0
+      "tn": 0.0,
+      "fp": 1.0,
+      "fn": 0.0,
+      "tp": 1.0
     },
-    "threshold": 0.05,
+    "threshold": 0.45,
     "n_samples": 75,
-    "mean_probability": 0.0
+    "mean_probability": 1.0,
+    "pr_curve": {
+      "precision": [
+        0.16,
+        1.0
+      ],
+      "recall": [
+        1.0,
+        0.0
+      ],
+      "thresholds": [
+        1.0
+      ]
+    }
   },
   "metadata": {
     "input_dim": 30,
     "split_strategy": "group",
+    "temporal_gap": 0,
     "n_train": 350,
     "n_val": 75,
     "n_test": 75,
@@ -557,6 +573,14 @@
       "426",
       "496"
     ],
+    "train_pos_rate": 0.14857142857142858,
+    "val_pos_rate": 0.14666666666666667,
+    "test_pos_rate": 0.16,
+    "train_class_counts": {
+      "0": 298,
+      "1": 52
+    },
+    "weighted_sampler": true,
     "dataset_statistics": {
       "n_samples": 500,
       "sequence_length": {
