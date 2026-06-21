@@ -11,7 +11,7 @@ Usage:
         --batch-size 1 \
         --num-samples 200
 
-Output (printed and written to model/checkpoints/inference_profile.json):
+Output (printed and written to results/checkpoints/inference_profile.json):
     inference_latency_ms  – median latency per sample in milliseconds
     peak_memory_mb        – peak allocated memory in megabytes
 """
@@ -157,7 +157,7 @@ def main():
     )
     parser.add_argument(
         "--output",
-        default="model/checkpoints/inference_profile.json",
+        default="results/checkpoints/inference_profile.json",
         help="Path to write the JSON profile results",
     )
     args = parser.parse_args()

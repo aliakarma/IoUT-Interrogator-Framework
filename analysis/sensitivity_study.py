@@ -114,14 +114,14 @@ def main():
     parser.add_argument("--intervals", type=int, default=20)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--use-transformer", type=_parse_bool, default=True)
-    parser.add_argument("--checkpoint", default="model/checkpoints/best_model.pt")
+    parser.add_argument("--checkpoint", default="results/checkpoints/best_model.pt")
     parser.add_argument("--model-config", default="model/configs/transformer_config.json")
     parser.add_argument("--temperature", type=float, default=1.5)
     parser.add_argument("--no-quantized-transformer", action="store_true")
     parser.add_argument("--tau-values", type=_parse_float_list, default="0.55,0.60,0.65,0.70,0.75")
     parser.add_argument("--sequence-lengths", type=_parse_int_list, default="16,32,64")
-    parser.add_argument("--threshold-output", default="analysis/stats/threshold_sensitivity.csv")
-    parser.add_argument("--sequence-output", default="analysis/stats/sequence_length_ablation.csv")
+    parser.add_argument("--threshold-output", default="results/stats/threshold_sensitivity.csv")
+    parser.add_argument("--sequence-output", default="results/stats/sequence_length_ablation.csv")
     args, unknown = parser.parse_known_args()
     if unknown:
         parser.error(

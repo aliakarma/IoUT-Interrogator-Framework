@@ -2,12 +2,12 @@
 Plot: Anomaly Detection Accuracy (Figure 4)
 =============================================
 Reproduces the trust accuracy comparison figure from the paper.
-Reads strictly from simulation/outputs/results.csv.
+Reads strictly from results/simulation/results.csv.
 
 Usage:
     python analysis/plot_trust_accuracy.py \
-        --input simulation/outputs/results.csv \
-        --output analysis/plots/trust_accuracy.png
+        --input results/simulation/results.csv \
+        --output results/plots/trust_accuracy.png
 """
 
 import argparse
@@ -79,8 +79,8 @@ def plot_trust_accuracy(df: pd.DataFrame, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="simulation/outputs/results.csv")
-    parser.add_argument("--output", default="analysis/plots/trust_accuracy.png")
+    parser.add_argument("--input",  default="results/simulation/results.csv")
+    parser.add_argument("--output", default="results/plots/trust_accuracy.png")
     args = parser.parse_args()
 
     df = load_or_generate_data(args.input)

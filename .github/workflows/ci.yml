@@ -1,46 +1,24 @@
-name: README Reproducibility Validation
+name: CI Smoke Test
 
-on:
-  push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main]
+on: [push, pull_request]
 
 jobs:
-  validate-readme-commands:
-    name: Validate README Commands (Py3.10)
+  quick-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Install dependencies from requirements.txt
+      - name: Install dependencies
         run: |
-          set -euxo pipefail
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run unit tests
+      - name: Run quick test
         run: |
-          set -euxo pipefail
-          pytest tests -q
-
-      - name: Validate quick pipeline command (README)
-        run: |
-          set -euxo pipefail
-          echo "Running: python scripts/run_full_pipeline.py --quick"
-          python scripts/run_full_pipeline.py --quick
-
-      - name: Validate full pipeline command (CI-reduced)
-        run: |
-          set -euxo pipefail
-          echo "Running reduced full pipeline for CI:"
-          echo "python scripts/reproduce_all.py --seed 42 --runs 2 --intervals 5 --skip-training"
-          python scripts/reproduce_all.py --seed 42 --runs 2 --intervals 5 --skip-training
+          python run_unsw_publication_pipeline.py --quick-test

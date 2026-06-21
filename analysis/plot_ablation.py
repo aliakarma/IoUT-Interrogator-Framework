@@ -6,7 +6,7 @@ than only the last interval, and includes interval trajectories.
 
 Usage:
     python analysis/plot_ablation.py \
-        --output analysis/plots/ablation_study.png
+        --output results/plots/ablation_study.png
 """
 
 import argparse
@@ -177,8 +177,8 @@ def plot_ablation(input_path: str, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="simulation/outputs/results.csv")
-    parser.add_argument("--output", default="analysis/plots/ablation_study.png")
+    parser.add_argument("--input", default="results/simulation/results.csv")
+    parser.add_argument("--output", default="results/plots/ablation_study.png")
     args = parser.parse_args()
     plot_ablation(args.input, args.output)
 

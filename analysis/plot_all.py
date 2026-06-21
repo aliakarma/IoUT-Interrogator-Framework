@@ -4,7 +4,7 @@ Master Plot Script
 Generates all paper figures in one command.
 
 Usage:
-    python analysis/plot_all.py [--input simulation/outputs/results.csv]
+    python analysis/plot_all.py [--input results/simulation/results.csv]
 """
 
 import argparse
@@ -16,9 +16,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 def main():
     parser = argparse.ArgumentParser(description="Generate all paper figures")
-    parser.add_argument("--input",  default="simulation/outputs/results.csv")
-    parser.add_argument("--outdir", default="analysis/plots/")
-    parser.add_argument("--trust-csv", default="data/processed/trust_scores.csv")
+    parser.add_argument("--input",  default="results/simulation/results.csv")
+    parser.add_argument("--outdir", default="results/plots/")
+    parser.add_argument("--trust-csv", default="results/processed/trust_scores.csv")
     parser.add_argument("--tau-min", type=float, default=0.65)
     args = parser.parse_args()
 

@@ -1354,7 +1354,7 @@ def sanity_check_overfit(
 def train_model(
     config_path:    str  = "model/configs/transformer_config.json",
     data_path:      str  = "data/raw/behavioral_sequences.json",
-    checkpoint_dir: str  = "model/checkpoints/",
+    checkpoint_dir: str  = "results/checkpoints/",
     label_smoothing_override: Optional[float] = None,
     inference_temperature_override: Optional[float] = None,
     verbose:        bool = True,

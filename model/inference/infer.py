@@ -14,10 +14,10 @@ Changes vs v1:
 
 Usage:
     python model/inference/infer.py \
-        --checkpoint model/checkpoints/best_model.pt \
+        --checkpoint results/checkpoints/best_model.pt \
         --config     model/configs/transformer_config.json \
         --sequences  data/sample/sample_sequences.json \
-        --output     data/processed/trust_scores.csv \
+        --output     results/processed/trust_scores.csv \
         --tau-min    0.65
 
     # Test with alternative threshold:
@@ -307,13 +307,13 @@ def main():
         description="Run behavioral trust inference [FIXED v2]"
     )
     parser.add_argument("--checkpoint",
-                        default="model/checkpoints/best_model.pt")
+                        default="results/checkpoints/best_model.pt")
     parser.add_argument("--config",
                         default="model/configs/transformer_config.json")
     parser.add_argument("--sequences",
                         default="data/sample/sample_sequences.json")
     parser.add_argument("--output",
-                        default="data/processed/trust_scores.csv")
+                        default="results/processed/trust_scores.csv")
     parser.add_argument("--tau-min",   type=float, default=0.65,
                         help="Trust threshold (paper default=0.65). "
                              "Test with 0.5 and 0.7 to verify non-collapse.")

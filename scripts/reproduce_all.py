@@ -1,6 +1,7 @@
 """
 Artifact Reproduction Script
 ============================
+LEGACY ENTRY POINT (optional): maintained for backward compatibility.
 Reproduces packaged Python artifact outputs (30 runs, seed=42).
 
 Usage:
@@ -20,6 +21,7 @@ from compat import ensure_supported_python
 
 def main():
     ensure_supported_python()
+    print("[legacy] scripts/reproduce_all.py is an optional backward-compatible entry point.")
     parser = argparse.ArgumentParser(
         description="Reproduce Python artifact outputs",
         allow_abbrev=False,

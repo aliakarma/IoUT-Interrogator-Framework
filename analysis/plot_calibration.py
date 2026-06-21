@@ -8,8 +8,8 @@ Generates calibration artifacts from inference output CSV:
 
 Usage:
     python analysis/plot_calibration.py \
-        --input data/processed/trust_scores.csv \
-        --outdir analysis/plots \
+        --input results/processed/trust_scores.csv \
+        --outdir results/plots \
         --tau-min 0.65
 """
 
@@ -25,7 +25,7 @@ import pandas as pd
 
 def _ensure_output_dirs(outdir: str):
     os.makedirs(outdir, exist_ok=True)
-    os.makedirs("analysis/stats", exist_ok=True)
+    os.makedirs("results/stats", exist_ok=True)
 
 
 def _confidence_from_trust(trust_scores: np.ndarray) -> np.ndarray:
@@ -149,7 +149,7 @@ def save_confidence_summary(df: pd.DataFrame):
             summary["adv_trust_mean"] = float(np.mean(adv))
             summary["adv_trust_std"] = float(np.std(adv))
 
-    out_csv = "analysis/stats/confidence_distribution_summary.csv"
+    out_csv = "results/stats/confidence_distribution_summary.csv"
     pd.DataFrame([summary]).to_csv(out_csv, index=False)
     print(f"Saved: {out_csv}")
 
@@ -216,8 +216,8 @@ def plot_reliability_curve(df: pd.DataFrame, outdir: str, tau_min: float):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate trust calibration diagnostics")
-    parser.add_argument("--input", default="data/processed/trust_scores.csv")
-    parser.add_argument("--outdir", default="analysis/plots")
+    parser.add_argument("--input", default="results/processed/trust_scores.csv")
+    parser.add_argument("--outdir", default="results/plots")
     parser.add_argument("--tau-min", type=float, default=0.65)
     args = parser.parse_args()
 

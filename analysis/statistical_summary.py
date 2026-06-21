@@ -6,8 +6,8 @@ including mean and bootstrap confidence intervals.
 
 Usage:
     python analysis/statistical_summary.py \
-    --input simulation/outputs/raw_results.csv \
-        --output analysis/stats/summary_table.csv
+    --input results/simulation/raw_results.csv \
+        --output results/stats/summary_table.csv
 """
 
 import argparse
@@ -265,8 +265,8 @@ def compute_model_significance(seed_level_df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="simulation/outputs/raw_results.csv")
-    parser.add_argument("--output", default="analysis/stats/summary_table.csv")
+    parser.add_argument("--input",  default="results/simulation/raw_results.csv")
+    parser.add_argument("--output", default="results/stats/summary_table.csv")
     parser.add_argument(
         "--aggregate-level",
         choices=["row", "seed"],

@@ -11,7 +11,7 @@ class HybridTemporalClassifier(nn.Module):
         hidden_dim: int = 96,
         channels: int = 96,
         kernel_size: int = 5,
-        dropout: float = 0.2,
+        dropout: float = 0.3,
     ) -> None:
         super().__init__()
         input_dim = int(input_dim)

@@ -1,144 +1,225 @@
-# IoUT Interrogator Framework
+﻿# IoUT Interrogator Framework
 
-An end-to-end, reproducible machine learning pipeline for Internet of Underwater Things (IoUT) signal classification and trust inference.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Reproducible](https://img.shields.io/badge/Protocol-20--Seed_Reproducible-success)
 
-The repository now exposes a production-oriented entry point at `run_pipeline.py` that wires together data loading, leakage-safe splitting, preprocessing, model training, baseline evaluation, checkpointing, and metric export.
+IoUT Interrogator Framework is a trust-aware IoUT anomaly inference pipeline with leakage-safe evaluation, class-imbalance controls, and deterministic multi-seed reporting on both synthetic and real network telemetry.
 
-## Project Overview
+## Table of Contents
+- [Highlights](#highlights)
+- [Visual Overview](#visual-overview)
+- [Datasets](#datasets)
+- [Experimental Setup](#experimental-setup)
+- [Final Results](#final-results)
+- [Reproducibility (Strict, Copy-Paste)](#reproducibility-strict-copy-paste)
+- [Installation](#installation)
+- [Expected Outputs](#expected-outputs)
+- [Configuration](#configuration)
+- [Repository Structure](#repository-structure)
+- [Citation](#citation)
+- [License](#license)
 
-The pipeline is organized around a simple contract:
+## Highlights
+- Leakage-safe protocol: split, scale, and threshold calibration are strictly train/validation scoped.
+- Real-data robustness: UNSW-NB15 class-imbalance handling with weighted loss, weighted sampling, and balanced-recall thresholding.
+- Reproducible statistics: 20-seed evaluation with mean and standard deviation reporting.
+- Reviewer-ready outputs: final summary tables, split checks, confusion matrix, and publication-style report artifacts.
 
-- `data/` handles ingestion, normalization, padding, and deterministic `group` or `time` splitting.
-- `models/` contains the GRU/LSTM sequence classifiers plus classical baselines.
-- `training/` owns the fit loop, checkpointing, and epoch logging.
-- `evaluation/` computes core metrics and writes run artifacts.
+## Visual Overview
+```mermaid
+flowchart LR
+    A[Raw Data] --> B[Leakage-Safe Split\nTrain / Val / Test]
+    B --> C[Train-Only Normalization]
+    C --> D[Model Training\nWeighted Loss + Weighted Sampler]
+    D --> E[Validation Threshold Sweep\nBalanced Recall Objective]
+    E --> F[Test Evaluation]
+    F --> G[20-Seed Aggregation\nFinal Metrics + Reports]
+```
 
-The default configuration runs immediately against the repository’s existing behavioral JSON data while also supporting CSV or JSON files with the schema `sensor_id,timestamp,signal[,label]`.
+## Datasets
 
-## Repository Layout
+### 1) Synthetic Behavioral Dataset
+- Purpose: controlled benchmarking across architectures and baselines.
+- Pipeline target: multi-model 20-seed robustness summary.
 
+### 2) Real-World Evaluation Dataset (UNSW-NB15)
+
+The dataset is not included in this repository due to licensing restrictions.
+
+Please download it from the official source:
+https://research.unsw.edu.au/projects/unsw-nb15-dataset
+
+After downloading, place the files in:
+
+`data/raw/unsw_nb15/`
+
+Expected files:
+- `UNSW_NB15_training-set.csv`
+- `UNSW_NB15_testing-set.csv`
+
+## Experimental Setup
+- Seeds: 42-61 (20 runs)
+- All experiments use fixed seeds (42-61) for reproducibility.
+- Splits: train 70%, validation 15%, test 15%
+- Threshold tuning: validation-only sweep over 0.45 to 0.75 using balanced recall
+- Imbalance controls:
+  - alpha-scaled BCEWithLogitsLoss (alpha = 0.7)
+  - weighted sampler with inverse-frequency exponent
+- Key constraints enforced:
+  - no test-time tuning
+  - no leakage
+  - no synthetic oversampling on real data
+
+## Final Results
+
+Only final artifacts are reported below.
+
+### Synthetic (20 seeds)
+Source: `results/synthetic_final/summary.csv`
+
+| Model | F1 (mean +/- std) | ROC-AUC (mean +/- std) | PR-AUC (mean +/- std) | Balanced Accuracy (mean +/- std) |
+| --- | --- | --- | --- | --- |
+| hybrid_temporal | 0.7851 +/- 0.0594 | 0.9637 +/- 0.0089 | 0.8851 +/- 0.0199 | 0.8514 +/- 0.0437 |
+| random_forest | 0.7081 +/- 0.0404 | 0.9003 +/- 0.0124 | 0.8088 +/- 0.0222 | 0.7870 +/- 0.0257 |
+| logistic_regression | 0.6667 +/- 0.0000 | 0.8638 +/- 0.0000 | 0.7572 +/- 0.0000 | 0.7758 +/- 0.0000 |
+| lstm | 0.6444 +/- 0.0403 | 0.8199 +/- 0.0422 | 0.6973 +/- 0.0345 | 0.7513 +/- 0.0216 |
+
+### Real (UNSW-NB15, balanced final, 20 seeds)
+Source: `results/unsw_final_balanced/summary.csv`
+
+| Metric | Mean +/- Std |
+| --- | --- |
+| F1 | 0.8910 +/- 0.0026 |
+| ROC-AUC | 0.9251 +/- 0.0199 |
+| PR-AUC | 0.9254 +/- 0.0298 |
+| Balanced Accuracy | 0.8397 +/- 0.0041 |
+| Recall (Class 0) | 0.6961 +/- 0.0075 |
+| Recall (Class 1) | 0.9834 +/- 0.0022 |
+
+## Reproducibility (Strict, Copy-Paste)
+
+### 0) System Requirements
+- OS: Linux, macOS, or Windows (PowerShell supported)
+- Python: 3.10+
+- Optional: CUDA-enabled GPU (training also works on CPU)
+
+### 1) Clone and Environment Setup
+```bash
+git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
+cd IoUT-Interrogator-Framework
+python -m venv .venv
+```
+
+Windows PowerShell:
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Linux/macOS:
+```bash
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 2) Data Preparation
+Place UNSW-NB15 CSV files in:
 ```text
-configs/default.yaml        Default pipeline configuration
-run_pipeline.py             Main CLI entry point
-data/data_loader.py         Dataset, split, normalization, batching
-data/download.sh            Placeholder for dataset acquisition
-models/sequence_model.py    GRU sequence classifier
-models/baselines.py         Random, rule-based, and sklearn baselines
-training/trainer.py         Deterministic training loop and checkpoints
-evaluation/metrics.py       Accuracy / precision / recall / F1
-evaluation/evaluate.py      Inference and metric export
-scripts/run_ablation_study.py   Ablation runner for preprocessing and temporal modeling
-scripts/run_multi_seed_experiments.py Multi-run aggregation and summary metrics
-scripts/run_robustness_experiments.py  Noise, missingness, and sensor failure tests
-scripts/generate_summary_table.py      CSV/Markdown benchmark summary generation
-results/run_1/              Checkpoints and run artifacts
-logs/train.log              Epoch-level training log
+data/raw/unsw_nb15/Training and Testing Sets/
+```
+
+### 3) Reproduce Final Synthetic 20-Seed Benchmark
+```bash
+python scripts/run_multi_seed_experiments.py \
+  --dataset synthetic \
+  --seeds 42-61
+```
+
+### 4) Reproduce Final UNSW 20-Seed Balanced Evaluation
+```bash
+python run_unsw_publication_pipeline.py --seeds 42-61
+```
+
+Quick verification (one-line):
+```bash
+python run_unsw_publication_pipeline.py --quick-test
+```
+
+### 5) Validate Final Outputs
+```bash
+python -c "import pandas as pd; print(pd.read_csv('results/synthetic_final/summary.csv'))"
+python -c "import pandas as pd; print(pd.read_csv('results/unsw_final_balanced/summary.csv'))"
+python -c "import json; print(json.load(open('results/unsw_final_balanced/validation_checks.json')))"
 ```
 
 ## Installation
 
-### Pip
+<details>
+<summary>Dependency Notes</summary>
 
-```bash
-python -m pip install -r requirements.txt
+- Core stack: PyTorch, NumPy, pandas, scikit-learn, SciPy, matplotlib.
+- Install from:
+  - `requirements.txt`
+- For CUDA, install the CUDA-compatible PyTorch build for your platform, then run the same commands above.
+
+</details>
+
+## Expected Outputs
+```text
+results/
+  synthetic_final/
+  unsw_final_balanced/
 ```
 
-### Docker
+Primary entry points:
+- `run_pipeline.py`
+- `run_unsw_publication_pipeline.py`
 
-```bash
-docker build -t iout-interrogator:latest .
-docker run --rm -v ${PWD}/results:/app/results -v ${PWD}/logs:/app/logs iout-interrogator:latest python run_pipeline.py --config configs/default.yaml
+## Configuration
+- Primary config file: `configs/default.yaml`
+- Main configurable groups:
+  - `data`: dataset source/path, split strategy, loader settings
+  - `model`: architecture type and dimensions
+  - `training`: epochs, learning rate, loss settings, seed
+  - `evaluation`: threshold, tuning metric, confusion-matrix export
+
+## Repository Structure
+```text
+IoUT-Interrogator-Framework/
+├── configs/          # Experiment and model configuration files
+├── data/             # Data loaders, adapters, and dataset docs
+├── docs/             # Methodology, changelog, and reproducibility notes
+├── scripts/          # Reproducible experiment entry points
+├── results/
+│   ├── synthetic_final/        # Final synthetic benchmark outputs
+│   └── unsw_final_balanced/    # Final real-data (UNSW) outputs
+├── models/           # Model architecture implementations
+├── training/         # Training loop and optimization logic
+├── evaluation/       # Metrics, threshold tuning, evaluation flow
+├── simulation/       # Simulation utilities and configs
+├── blockchain/       # Optional blockchain integration components
+├── tests/            # Automated validation tests
+├── run_pipeline.py   # Main pipeline entry point
+└── run_unsw_publication_pipeline.py  # Real-data publication pipeline entry
 ```
 
-On Windows PowerShell, use the same `docker run` command with `${PWD}` as shown above.
+## Citation
 
-## Dataset Instructions
+Use `CITATION.cff` when available, or the placeholder below:
 
-The loader accepts two formats:
-
-- Long-form CSV or JSON with columns or keys: `sensor_id`, `timestamp`, `signal`, and optionally `label`.
-- Legacy sequence JSON from this repository, where each item contains a `sequence` array and a `label`. The loader converts that representation into grouped sensor trajectories automatically.
-
-Recommended dataset conventions:
-
-- Use a stable `sensor_id` per entity or device.
-- Keep timestamps sortable and numeric.
-- Provide labels at the sensor or group level whenever possible.
-- Place raw files under `data/raw/` and point `configs/default.yaml` at the file you want to train on.
-- Use `split_strategy: group` to keep the same `sensor_id` out of train and test, or `split_strategy: time` to enforce train-past/test-future ordering.
-
-If you need a placeholder acquisition script, use `data/download.sh` as the location for your real download or extraction commands.
-
-## Outputs
-
-Each run writes artifacts to `results/run_1/` and `logs/`:
-
-- `results/run_1/checkpoints/best.pt` - best validation checkpoint for the GRU model
-- `results/run_1/metrics.json` - evaluation metrics plus confusion matrix metadata
-- `results/run_1/confusion_matrix.json` - optional confusion matrix export
-- `results/run_1/training_summary.json` - epoch history, best validation loss, parameter count, and runtime
-- `results/run_1/run_summary.json` - combined metadata, train summary, and evaluation summary
-- `logs/train.log` - epoch-level training and validation loss
-
-The metrics file contains:
-
-- accuracy
-- precision
-- recall
-- F1
-
-## Reproduce Results in 5 Steps
-
-```bash
-git clone https://github.com/aliakarma/IoUT-Interrogator-Framework.git
-cd IoUT-Interrogator-Framework
-python -m pip install -r requirements.txt
-python run_pipeline.py --config configs/default.yaml
-python -c "import json, pathlib; print(json.dumps(json.loads(pathlib.Path('results/run_1/metrics.json').read_text()), indent=2))"
+```bibtex
+@misc{iout_interrogator_framework,
+  title        = {IoUT Interrogator Framework: Trust-Aware IoUT Anomaly Inference},
+  author       = {Akarma, Ali and contributors},
+  year         = {2026},
+  howpublished = {GitHub repository},
+  note         = {Reproducible 20-seed synthetic and UNSW-NB15 evaluations}
+}
 ```
 
-## Baselines
-
-The repository includes these drop-in baseline modes:
-
-- `random`
-- `majority`
-- `moving_average`
-- `rule`
-- `logistic_regression`
-- `random_forest`
-- `fft`
-
-These share the same dataset split and evaluation path as the GRU model, so comparisons are aligned and reproducible.
-
-## Reproducibility Guarantees
-
-- `random.seed(42)`
-- `numpy.random.seed(42)`
-- `torch.manual_seed(42)`
-- deterministic group splits by `sensor_id`
-- temporal splits that preserve train-past/test-future ordering
-- no train/validation/test overlap at the sensor level
-
-## Experiment Scripts
-
-- `python scripts/run_ablation_study.py` runs ablations under `results/ablation/`
-- `python scripts/run_robustness_experiments.py` writes noise, missing-data, and sensor-failure evaluations under `results/robustness/`
-- `python scripts/run_multi_seed_experiments.py` produces `results/aggregate_metrics.json` and `results/summary_table.csv`
-- `python scripts/generate_summary_table.py` scans result folders and emits CSV and Markdown summary tables
-
-## Reproducible Results
-
-This repository contains only final 20-seed experimental results.
-
-Intermediate experiments (smoke tests, iterations) are excluded for clarity.
-
-All reported results can be reproduced using:
-
-```bash
-python scripts/run_multi_seed_experiments.py --seeds 42-61
-```
-
-## Notes
-
-The repository still includes legacy analysis and simulation code for prior experiments, but the recommended production entry point is now `run_pipeline.py`.
+## License
+This project is released under the MIT License. See `LICENSE`.
