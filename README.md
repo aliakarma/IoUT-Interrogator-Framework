@@ -1,4 +1,4 @@
-﻿# IoUT Interrogator Framework
+# IoUT Interrogator Framework
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c)
@@ -81,10 +81,10 @@ Source: `results/synthetic_final/summary.csv`
 
 | Model | F1 (mean +/- std) | ROC-AUC (mean +/- std) | PR-AUC (mean +/- std) | Balanced Accuracy (mean +/- std) |
 | --- | --- | --- | --- | --- |
-| hybrid_temporal | 0.7851 +/- 0.0594 | 0.9637 +/- 0.0089 | 0.8851 +/- 0.0199 | 0.8514 +/- 0.0437 |
-| random_forest | 0.7081 +/- 0.0404 | 0.9003 +/- 0.0124 | 0.8088 +/- 0.0222 | 0.7870 +/- 0.0257 |
-| logistic_regression | 0.6667 +/- 0.0000 | 0.8638 +/- 0.0000 | 0.7572 +/- 0.0000 | 0.7758 +/- 0.0000 |
-| lstm | 0.6444 +/- 0.0403 | 0.8199 +/- 0.0422 | 0.6973 +/- 0.0345 | 0.7513 +/- 0.0216 |
+| hybrid_temporal | 0.7524 +/- 0.0483 | 0.9674 +/- 0.0099 | 0.8814 +/- 0.0250 | 0.8277 +/- 0.0344 |
+| random_forest | 0.7081 +/- 0.0394 | 0.9003 +/- 0.0121 | 0.8088 +/- 0.0217 | 0.7870 +/- 0.0250 |
+| logistic_regression | 0.6667 +/- 0.0000 | 0.8624 +/- 0.0000 | 0.7567 +/- 0.0000 | 0.7758 +/- 0.0000 |
+| lstm | 0.7253 +/- 0.0421 | 0.9287 +/- 0.0113 | 0.8371 +/- 0.0228 | 0.8014 +/- 0.0317 |
 
 ### Real (UNSW-NB15, balanced final, 20 seeds)
 Source: `results/unsw_final_balanced/summary.csv`
