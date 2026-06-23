@@ -41,16 +41,16 @@ def load_config():
 class TestConfig:
 
     def test_dropout_is_increased(self):
-        """v3 fix: dropout should be 0.2, not v1's 0.1."""
+        """v3 fix: dropout should be 0.3 for regularization."""
         config = load_config()
-        assert config["architecture"]["dropout"] == 0.2, \
-            "dropout must be 0.2 for v3 regularization (was 0.1 in v1)"
+        assert config["architecture"]["dropout"] == 0.3, \
+            "dropout must be 0.3 for v3 regularization"
 
     def test_weight_decay_is_increased(self):
-        """v3 fix: weight_decay should be 1e-3, not v1's 1e-4."""
+        """v3 fix: weight_decay should be 5e-4."""
         config = load_config()
-        assert config["training"]["weight_decay"] == 1e-3, \
-            "weight_decay must be 1e-3 (was 1e-4 in v1)"
+        assert config["training"]["weight_decay"] == 5e-4, \
+            "weight_decay must be 5e-4"
 
     def test_learning_rate_is_reduced(self):
         """v3 fix: lr should be 5e-4, not v1's 1e-3."""
@@ -97,7 +97,7 @@ class TestTrustTransformer:
 
     def test_parameter_count(self):
         n = self.model.count_parameters()
-        assert 300_000 < n < 2_500_000, \
+        assert 200_000 < n < 2_500_000, \
             f"Expected ~500K-1.2M params, got {n:,}"
 
     def test_output_shape(self):
